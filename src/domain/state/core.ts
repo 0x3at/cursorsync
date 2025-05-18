@@ -17,11 +17,15 @@ import {
 } from '../../shared/schemas/state';
 import { ILogger } from '../../utils/logger';
 import { createValueStore, IValueStore } from '../../utils/stores';
-import { registerDebugContext, registerDebugState } from '../commands/debug';
+import {
+	registerDebugContext,
+	registerDebugState,
+	registerResetState
+} from '../commands/debug';
 import {
 	registerUpdateLabel,
 	registerUpdateSettingsLocation
-} from '../commands/setters';
+} from '../commands/set';
 import { createController, IController } from '../network/git';
 
 const buildDependencies = async (
@@ -82,7 +86,7 @@ const buildDependencies = async (
 	const runUpdateLabel = registerUpdateLabel(deviceLabel, logger);
 	const runUpdateSettingsLocation =
 		registerUpdateSettingsLocation(settingsPath);
-
+	const runResetState = registerResetState(ctx, logger);
 	try {
 		// ? Initialize API Controller
 		const controller = await createController(
@@ -106,7 +110,8 @@ const buildDependencies = async (
 					runDebugState,
 					runDebugContext,
 					runUpdateLabel,
-					runUpdateSettingsLocation
+					runUpdateSettingsLocation,
+					runResetState
 				],
 				controller: controller
 			}
@@ -143,55 +148,66 @@ const assembleBuildHooks = async (
 		);
 		devicesGistID.set(
 			devicesGistID.get() === undefined
-				? (
-						_gist!.files['references.json']
+				? devicesGistID.get()
+				: (
+						_gist?.files['references.json']
 							.content as IReferenceContent
 				  ).devices.find(
 						(reference: IDeviceReference) =>
 							reference.deviceID === machineId.get()
-				  )
-				: devicesGistID.get()
+				  )?.gistID
 		);
 	}
+	const requiredStateHooks = [
+		{
+			check: () => deviceLabel.get() === undefined,
+			action: () =>
+				commands.executeCommand('cursorsync.update.deviceLabel')
+		},
+		{
+			check: () => settingsPath.get() === undefined,
+			action: () =>
+				commands.executeCommand('cursorsync.update.settingspath')
+		}
+	];
+	const getInitAction = () => {
+		// General gist doesn't exist, need full initialization
+		if (generalGistID.get() === undefined) {
+			return controller.initRemote;
+		}
 
-	const hooks: CallableFunction[] = [
-		async () => {
-			if (deviceLabel.get() === undefined) {
-				await commands.executeCommand('cursorsync.update.deviceLabel');
-			}
-		},
-		async () => {
-			if (settingsPath.get() === undefined) {
-				await commands.executeCommand('cursorsync.update.settingspath');
-			}
-		},
-		(() => {
-			const initActions = {
-				none: controller.initRemote,
-				generalExists: () => {
-					if (
-						devicesGistID.get() === undefined &&
-						extensionsGistID.get() === undefined
-					) {
-						return async () => {
-							await controller.initDeviceProfile();
-							await controller.initExtensionProfile();
-						};
-					}
-					return devicesGistID.get() === undefined
-						? controller.initDeviceProfile
-						: extensionsGistID.get() === undefined
-						? controller.initExtensionProfile
-						: async () => {};
-				}
+		// Both profile types missing
+		if (
+			devicesGistID.get() === undefined &&
+			extensionsGistID.get() === undefined
+		) {
+			return async () => {
+				await controller.initDeviceProfile();
+				await controller.initExtensionProfile();
 			};
+		}
 
-			if (generalGistID.get() === undefined) {
-				return initActions.none;
-			} else {
-				return initActions.generalExists();
+		// Only device profile missing
+		if (devicesGistID.get() === undefined) {
+			return controller.initDeviceProfile;
+		}
+
+		// Only extension profile missing
+		if (extensionsGistID.get() === undefined) {
+			return controller.initExtensionProfile;
+		}
+
+		// Nothing missing
+		return async () => {};
+	};
+
+	const hooks = [
+		...requiredStateHooks.map((hook) => async () => {
+			if (hook.check()) {
+				await hook.action();
 			}
-		})()
+		}),
+		getInitAction()
 	];
 
 	logger.debug('Hooks completed...');

@@ -9,35 +9,43 @@ import {
 } from 'vscode';
 
 import { ExtensionKeys, machineId } from '../../shared/environment';
-import { IFiles, IGist } from '../../shared/schemas/api.git';
+import { IFiles, IGist, IRequestOpts } from '../../shared/schemas/api.git';
 import {
+	IDeviceFiles,
 	IDeviceProfile,
 	IDeviceReference,
 	IExtensionProfile,
 	IGeneralContent,
+	IGeneralFiles,
 	IReferenceContent
 } from '../../shared/schemas/content';
+import { IResult } from '../../shared/schemas/state';
 import { ILogger } from '../../utils/logger';
 import { IValueStore } from '../../utils/stores';
 import { loadSettings } from '../../utils/utils';
 
 export interface IController {
 	session: AuthenticationSession;
+	sync: {
+		reference: (
+			generalGist: IGist,
+			deviceGist: IGist,
+			_deviceLabel: IValueStore<string | undefined>
+		) => Promise<IResult<any>>;
+		device: (deviceGist: IGist) => Promise<IResult<any>>;
+	};
 	section: (opts: {
 		key: ExtensionKeys;
 		id?: string;
 	}) => Promise<IGist | null>;
-	call: (opts: {
-		method?: 'P' | 'G';
-		payload?: {};
-		endpoint?: string;
-	}) => Promise<any>;
+
+	call: (opts: IRequestOpts) => Promise<any>;
 	initRemote: () => Promise<{ success: boolean; error?: any }[]>;
 	initDeviceProfile: () => Promise<{ success: boolean; error?: any }>;
 	initExtensionProfile: () => Promise<{ success: boolean; error?: any }>;
 }
 
-export const session = async (): Promise<AuthenticationSession> => {
+export const authSession = async (): Promise<AuthenticationSession> => {
 	// Request a GitHub session with the 'gist' scope
 	try {
 		const session = await authentication.getSession('github', ['gist'], {
@@ -51,37 +59,35 @@ export const session = async (): Promise<AuthenticationSession> => {
 		throw error;
 	}
 };
+export type RequestMethod = 'G' | 'P' | 'U';
 
-const __request = async (
-	method?: string,
-	payload?: {},
-	endpoint?: string
-): Promise<any> => {
-	const urlRoot: string = 'https://api.github.com/';
-	payload = payload !== undefined ? payload : undefined;
-	endpoint = endpoint !== undefined ? endpoint : 'gists';
-	const _method =
-		method === 'P' ? axios.post : method === 'U' ? axios.patch : axios.get;
+const createApiRequest = async (options: IRequestOpts): Promise<any> => {
+	const { method = 'G', payload, endpoint = 'gists' } = options;
+	const url = `https://api.github.com/${endpoint}`;
+
 	try {
-		const token = (await session()).accessToken;
+		const token = (await authSession()).accessToken;
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			Accept: 'application/vnd.github.v3+json'
+		};
 
-		const response =
-			payload === undefined
-				? await _method(`${urlRoot}${endpoint}`, {
-						headers: {
-							Authorization: `Bearer ${token}`,
-							Accept: 'application/vnd.github.v3+json'
-						}
-				  })
-				: await _method(`${urlRoot}${endpoint}`, payload, {
-						headers: {
-							Authorization: `Bearer ${token}`,
-							Accept: 'application/vnd.github.v3+json'
-						}
-				  });
-		if (response.data === undefined) {
-			throw Error(`Response is undefined`);
+		let response;
+		switch (method) {
+			case 'P':
+				response = await axios.post(url, payload, { headers });
+				break;
+			case 'U':
+				response = await axios.patch(url, payload, { headers });
+				break;
+			default:
+				response = await axios.get(url, { headers });
 		}
+
+		if (!response.data) {
+			throw new Error('Response data is undefined');
+		}
+
 		return response.data;
 	} catch (error) {
 		window.showErrorMessage(`CursorSync: API Error ${error}`);
@@ -96,7 +102,10 @@ const getFileContent = async (
 };
 const getGist = async (id: string): Promise<IGist> => {
 	try {
-		const res: IGist = await __request('G', {}, `gists/${id}`);
+		const res: IGist = await createApiRequest({
+			method: 'G',
+			endpoint: `gists/${id}`
+		});
 		await Object.keys(res.files).forEach(async (key: string) => {
 			let f: IFiles<any> = (res.files as any)[key];
 			if (f.truncated === true) {
@@ -111,7 +120,7 @@ const getGist = async (id: string): Promise<IGist> => {
 };
 
 const getGists = async (): Promise<IGist[]> => {
-	const allGists: IGist[] = await __request();
+	const allGists: IGist[] = await createApiRequest({});
 	const targetGists: IGist[] = await Promise.all(
 		Array.from(allGists)
 			.filter(
@@ -213,7 +222,7 @@ const createDeviceProfile = async (
 		const _machineId = machineId.get();
 		const _label = deviceLabel.get();
 		const _timestamp = Date.now();
-		const settings = loadSettings(settingsPath.get());
+		const settings = await loadSettings(settingsPath.get());
 		const devfiles = {
 			[`${machineId.get()}.json`]: {
 				content: JSON.stringify({
@@ -276,24 +285,145 @@ export const createController = async (
 	extensionsProfileID: IValueStore<string>,
 	settingsPath: IValueStore<string>
 ): Promise<IController> => {
-	const _api = __request;
-	const _call = async (opts: {
-		method?: 'P' | 'G';
-		payload?: {};
-		endpoint?: string;
-	}) => await _api(opts.method, opts.payload, opts.endpoint);
+	const _api = createApiRequest;
+	const _call = async (opts: IRequestOpts) => await _api(opts);
 	try {
-		const _session = await session();
+		const _session = await authSession();
 
 		return {
 			session: _session,
+			sync: {
+				reference: async (
+					generalGist: IGist,
+					deviceGist: IGist,
+					_deviceLabel: IValueStore<string | undefined>
+				): Promise<IResult<any>> => {
+					try {
+						const deviceList = (generalGist.files as IGeneralFiles)[
+							'references.json'
+						].content.devices;
+						const deviceReference: Partial<IDeviceReference> = {
+							gistID: deviceGist.id,
+							deviceID: machineId.get(),
+							isMaster: false,
+							deviceLabel: _deviceLabel.get(),
+							fileName: `${machineId.get()}.json`,
+							...(deviceList.find(
+								(reference) =>
+									reference.deviceID === machineId.get()
+							) || {})
+						};
+						deviceReference.lastSync = Date.now();
+						const filteredList = deviceList.filter(
+							(reference) =>
+								reference.deviceID !== machineId.get()
+						);
+						filteredList.push(deviceReference as IDeviceReference);
+						(generalGist.files as IGeneralFiles)[
+							'references.json'
+						].content.devices = filteredList;
+
+						const files: {
+							[key: string]: { content: string };
+						} = {};
+						for (const [fileName, file] of Object.entries(
+							generalGist.files as IGeneralFiles
+						)) {
+							files[fileName] = {
+								content: JSON.stringify(
+									(
+										file as IFiles<
+											IGeneralContent | IReferenceContent
+										>
+									).content
+								)
+							};
+						}
+
+						const patchOpts: IRequestOpts = {
+							method: 'U',
+							endpoint: `gists/${generalGist.id}`,
+							payload: {
+								description: generalGist.description,
+								files: files
+							}
+						};
+
+						const head: IGist = await _call(patchOpts);
+						return {
+							success: true,
+							data: head
+						} as IResult<IGist>;
+					} catch (error) {
+						logger.error(
+							`Failed to update references file: ${error}`,
+							true
+						);
+						return {
+							success: false,
+							error: error
+						} as IResult<IGist>;
+					}
+				},
+				device: async (deviceGist: IGist): Promise<IResult<any>> => {
+					try {
+						const deviceProfiles = deviceGist.files as IDeviceFiles;
+						const currentProfile: Partial<IDeviceProfile> = {
+							created: Date.now(),
+							deviceId: machineId.get(),
+							deviceLabel: deviceLabel.get(),
+							settings: await loadSettings(settingsPath.get()),
+							...((deviceProfiles[`${machineId.get()}.json`]
+								?.content as Partial<IDeviceProfile>) ||
+								({} as Partial<IDeviceProfile>))
+						};
+
+						currentProfile.lastSync = Date.now();
+						deviceProfiles[`${machineId.get()}.json`] =
+							currentProfile as IFiles<IDeviceProfile>;
+
+						const files: { [key: string]: { content: string } } =
+							{};
+						for (const [fileName, file] of Object.entries(
+							deviceProfiles
+						)) {
+							files[fileName] = {
+								content: JSON.stringify(
+									file.content as IDeviceProfile
+								)
+							};
+						}
+
+						const patchOpts: IRequestOpts = {
+							method: 'U',
+							endpoint: `gists/${deviceGist.id}`,
+							payload: {
+								description: deviceGist.description,
+								files: files
+							}
+						};
+
+						const head: IGist = await _call(patchOpts);
+						deviceProfileID.set(head.id);
+						return {
+							success: true,
+							data: head
+						} as IResult<IGist>;
+					} catch (error) {
+						logger.error(
+							`Failed to update device profile file: ${error}`,
+							true
+						);
+						return {
+							success: false,
+							error: error
+						} as IResult<IGist>;
+					}
+				}
+			},
 			section: async (opts: { key: ExtensionKeys; id?: string }) =>
 				await getSection(opts),
-			call: async (opts: {
-				method?: 'P' | 'G';
-				payload?: {};
-				endpoint?: string;
-			}) => await _call(opts),
+			call: async (opts: IRequestOpts) => await _call(opts),
 			initRemote: async () => {
 				logger.inform('Initializing Remote...', [
 					{ title: 'Configuring CursorSync Gists' }

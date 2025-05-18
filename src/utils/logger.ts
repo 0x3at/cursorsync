@@ -1,4 +1,10 @@
-import { ExtensionContext, MessageItem, MessageOptions, window } from 'vscode';
+import {
+	ExtensionContext,
+	LogOutputChannel,
+	MessageItem,
+	MessageOptions,
+	window
+} from 'vscode';
 
 import { ExtensionKeys } from '../shared/environment';
 
@@ -16,6 +22,7 @@ export interface ILogger {
 	log: (msg: string) => void;
 	debug: (msg: string) => void;
 	show: () => void;
+	self: LogOutputChannel;
 }
 
 const Logger = (ctx: ExtensionContext): ILogger => {
@@ -26,7 +33,6 @@ const Logger = (ctx: ExtensionContext): ILogger => {
 	const _logger = window.createOutputChannel(ExtensionKeys.prefix, {
 		log: true
 	});
-	ctx.subscriptions.push(_logger);
 
 	return {
 		inform: async (msg: string, items?: MessageItem[]) => {
@@ -58,7 +64,8 @@ const Logger = (ctx: ExtensionContext): ILogger => {
 		debug: async (msg: string) => {
 			_logger.debug(msg);
 		},
-		show: () => _logger.show()
+		show: () => _logger.show(),
+		self: _logger
 	};
 };
 

@@ -14,6 +14,14 @@
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
+		"views": {
+			"explorer": [
+				{
+					"id": "cursorsync.visualize",
+					"name": "Profile Expolorer"
+				}
+			]
+		},
 		"commands": [
 			{
 				"command": "cursorsync.update.deviceLabel",
@@ -29,7 +37,7 @@
 			},
 			{
 				"command": "cursorsync.debug.showsession",
-				"title": "CursorSync: Inspect Context Keys"
+				"title": "CursorSync: Inspect Session"
 			},
 			{
 				"command": "cursorsync.debug.showstate",
@@ -38,6 +46,10 @@
 			{
 				"command": "cursorsync.debug.showcontext",
 				"title": "CursorSync: Inspect Context Values"
+			},
+			{
+				"command": "cursorsync.reset.state",
+				"title": "CursorSync: Reset Global State"
 			}
 		]
 	},

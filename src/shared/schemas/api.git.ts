@@ -1,3 +1,4 @@
+import { RequestMethod } from '../../domain/network/git';
 import { IDeviceFiles, IExtensionFiles, IGeneralFiles } from './content';
 
 export interface IGist {
@@ -53,4 +54,9 @@ export interface IFiles<T> {
 	truncated: boolean;
 	content: T;
 	encoding: string;
+}
+export interface IRequestOpts {
+	method?: RequestMethod;
+	payload?: any;
+	endpoint?: string;
 }

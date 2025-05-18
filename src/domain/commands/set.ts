@@ -6,7 +6,7 @@ import { ILogger } from '../../utils/logger';
 import { IValueStore } from '../../utils/stores';
 import { exists, settingsJSON } from '../../utils/utils';
 
-const UpdateLabel = async (
+const updateLabel = async (
 	deviceLabel: IValueStore<string>,
 	logger: ILogger
 ) => {
@@ -38,11 +38,11 @@ export const registerUpdateLabel = (
 ) => {
 	return commands.registerCommand(
 		'cursorsync.update.deviceLabel',
-		async () => await UpdateLabel(deviceLabel, logger)
+		async () => await updateLabel(deviceLabel, logger)
 	);
 };
 
-const UpdateSettingsLocations = async (settingsPath: IValueStore<string>) => {
+const updateSettingsLocations = async (settingsPath: IValueStore<string>) => {
 	const path: string = exists(Fallbacks.settings)
 		? Fallbacks.settings.fsPath
 		: (await settingsJSON())[0].fsPath;
@@ -53,6 +53,6 @@ export const registerUpdateSettingsLocation = (
 	settingsPath: IValueStore<string>
 ) =>
 	commands.registerCommand(
-		'cursorsync.scaffolding.settings',
-		async () => await UpdateSettingsLocations(settingsPath)
+		'cursorsync.update.settingspath',
+		async () => await updateSettingsLocations(settingsPath)
 	);
