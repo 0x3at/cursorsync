@@ -17,12 +17,18 @@
 		"views": {
 			"explorer": [
 				{
-					"id": "cursorsync.visualize",
-					"name": "Profile Expolorer"
+					"id": "cursorsync.gistView",
+					"name": "CursorSync Gists"
 				}
 			]
 		},
 		"commands": [
+			{
+				"command": "cursorsync.refreshGistView",
+				"title": "Refresh Gist View",
+				"icon": "$(refresh)",
+				"category": "CursorSync"
+			},
 			{
 				"command": "cursorsync.update.deviceLabel",
 				"title": "Update Device Label",
@@ -37,11 +43,11 @@
 			},
 			{
 				"command": "cursorsync.debug.showsession",
-				"title": "CursorSync: Inspect Session"
+				"title": "CursorSync: Inspect Auth Session"
 			},
 			{
 				"command": "cursorsync.debug.showstate",
-				"title": "CursorSync: Inspect Global State"
+				"title": "CursorSync: Inspect Global State Keys"
 			},
 			{
 				"command": "cursorsync.debug.showcontext",
@@ -51,7 +57,16 @@
 				"command": "cursorsync.reset.state",
 				"title": "CursorSync: Reset Global State"
 			}
-		]
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "cursorsync.refreshGistView",
+					"when": "view == cursorsync.gistView",
+					"group": "navigation"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run package",

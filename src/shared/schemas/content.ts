@@ -1,6 +1,7 @@
 import { IFiles } from './api.git';
 
 export interface IGeneralFiles {
+	[key: string]: IFiles<IGeneralContent> | IFiles<IReferenceContent>;
 	['general.json']: IFiles<IGeneralContent>;
 	['references.json']: IFiles<IReferenceContent>;
 }

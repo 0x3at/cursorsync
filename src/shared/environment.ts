@@ -36,15 +36,16 @@ const createFlagStore = (name: string, state?: boolean): IFlagStore => {
 	let _state = state !== undefined ? state : false;
 	return {
 		inspect: _state,
-		activate: () => {
+		activate: async () => {
 			_state = true;
-			commands.executeCommand('setContext', name, _state);
+			return await commands.executeCommand('setContext', name, _state);
 		},
-		deactivate: () => {
+		deactivate: async () => {
 			_state = false;
-			commands.executeCommand('setContext', name, _state);
+			return await commands.executeCommand('setContext', name, _state);
 		},
-		toggle: () => commands.executeCommand('setContext', name, !_state)
+		toggle: async () =>
+			await commands.executeCommand('setContext', name, !_state)
 	};
 };
 

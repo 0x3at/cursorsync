@@ -230,7 +230,7 @@ const createDeviceProfile = async (
 					deviceId: _machineId,
 					deviceLabel: _label,
 					lastSync: _timestamp,
-					settings: JSON.stringify(settings)
+					settings: settings
 				} as IDeviceProfile)
 			}
 		};
