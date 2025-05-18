@@ -4,10 +4,18 @@ import { createValueStore, IValueStore } from '../utils/stores';
 
 export enum ExtensionKeys {
 	prefix = 'cursorsync',
-	generalGist = 'cursorsync.general',
-	deviceGist = 'cursorsync.devices',
-	extensionGist = 'cursorsync.extensions'
+	referenceGist = 'cursorsync.general',
+	settingsCollection = 'cursorsync.devices',
+	extensionCollection = 'cursorsync.extensions'
 }
+
+export type StateKey =
+	| 'referenceID'
+	| 'settingsCollection'
+	| 'extensionCollection'
+	| 'settingsProfile'
+	| 'extensionProfile';
+
 interface IFlagStore {
 	inspect: boolean;
 	activate: () => void;

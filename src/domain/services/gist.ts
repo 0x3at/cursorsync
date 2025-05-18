@@ -3,28 +3,24 @@ import axios from 'axios';
 import { ExtensionKeys } from '../../shared/environment';
 import { IGist } from '../../shared/schemas/api.git';
 import {
-	IDeviceFiles,
-	IDeviceProfile,
 	IExtensionFiles,
 	IExtensionProfile,
-	IGeneralContent,
-	IGeneralFiles
+	IReferenceContent,
+	IReferenceFiles,
+	ISettingsFiles,
+	ISettingsProfile
 } from '../../shared/schemas/content';
 import { ILogger } from '../../utils/logger';
 import { IApiService } from './api';
 
-// src/domain/services/gist.ts
 export interface IGistService {
-	getGist<T = IGeneralContent | IDeviceProfile | IExtensionProfile>(opts: {
-		id?: string;
-		gist?: IGist;
-	}): Promise<IGist>;
+	getGist(opts: { id?: string; gist?: IGist }): Promise<IGist>;
 	getGistsByPrefix(prefix: ExtensionKeys): Promise<IGist[]>;
-	createGist<T = IGeneralFiles | IDeviceFiles | IExtensionFiles>(
+	createGist<T = IReferenceFiles | ISettingsFiles | IExtensionFiles>(
 		description: string,
 		files: T
 	): Promise<IGist>;
-	updateGist<T = Partial<IGeneralFiles> | IDeviceFiles | IExtensionFiles>(
+	updateGist<T = Partial<IReferenceFiles> | ISettingsFiles | IExtensionFiles>(
 		id: string,
 		files: T
 	): Promise<IGist>;
@@ -34,14 +30,12 @@ export interface IGistService {
 	}): Promise<IGist | null>;
 }
 
-export const createGistService = <
-	T = IGeneralContent | IDeviceProfile | IExtensionProfile
->(
+export const createGistService = (
 	apiService: IApiService,
 	logger: ILogger
 ): IGistService => {
 	const getGist = async <
-		T = IGeneralContent | IDeviceProfile | IExtensionProfile
+		T = IReferenceContent | ISettingsProfile | IExtensionProfile
 	>(opts: {
 		id?: string;
 		gist?: IGist;
@@ -95,7 +89,9 @@ export const createGistService = <
 	return {
 		getGist,
 		getGistsByPrefix,
-		createGist: async <T = IGeneralFiles | IDeviceFiles | IExtensionFiles>(
+		createGist: async <
+			T = IReferenceFiles | ISettingsFiles | IExtensionFiles
+		>(
 			description: string,
 			files: T
 		): Promise<IGist> => {
@@ -107,7 +103,7 @@ export const createGistService = <
 			return await getGist({ gist: g });
 		},
 		updateGist: async <
-			T = Partial<IGeneralFiles> | IDeviceFiles | IExtensionFiles
+			T = Partial<IReferenceFiles> | ISettingsFiles | IExtensionFiles
 		>(
 			id: string,
 			files: T

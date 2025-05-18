@@ -1,47 +1,66 @@
 import { IFiles } from './api.git';
 
-export interface IGeneralFiles {
-	[key: string]: IFiles<IGeneralContent> | IFiles<IReferenceContent>;
-	['general.json']: IFiles<IGeneralContent>;
+// ? Remote Legend: Should be kept up to date
+export interface IReferenceFiles {
+	[key: string]: IFiles<IReferenceContent>;
 	['references.json']: IFiles<IReferenceContent>;
 }
-export interface IDeviceFiles {
-	[key: string]: IFiles<IDeviceProfile>;
+
+// ? Remote Settings Record
+export interface ISettingsFiles {
+	[key: string]: IFiles<ISettingsProfile>; // filename{key} is the settings profile name
 }
+// ? Remote Extension Record
 export interface IExtensionFiles {
-	[key: string]: IFiles<IExtensionProfile>;
+	[key: string]: IFiles<IExtensionProfile>; // filename{key} is the esxtenison profile name
 }
 
+// ? Extension Profile Content Schema
 export interface IExtensionProfile {
 	created: number;
 	profile: string;
 	tags: string[];
 	extensions: any[];
 }
-export interface IDeviceProfile {
+
+// ? Settings Profile Content Schema
+export interface ISettingsProfile {
 	created: number;
-	deviceId: string;
-	deviceLabel: string;
-	lastSync: number;
+	profile: string;
+	tags: string[];
+	modified: number;
 	settings: string | ISettings;
 }
+
+// ? Simple Vscode Settings interface
 interface ISettings {
 	[key: string]: any;
 }
-
-export interface IGeneralContent {
-	created: number;
-}
+// ? Root Object of the reference file
 export interface IReferenceContent {
 	created: number;
-	lastUpdate: number;
+	modified: number;
+
+	masterid: string;
 	devices: IDeviceReference[];
 }
+
+// ? Record of new devices, connections, and configs
 export interface IDeviceReference {
-	gistID: string;
 	deviceID: string;
-	isMaster: boolean;
 	deviceLabel: string;
-	fileName: string;
+	targetMaster: boolean;
+	extensionProfile: string;
+	settingsProfile: string;
 	lastSync: number;
+}
+
+//? meant to be managed/watched/handles by our local service
+export interface ILocalProfile {
+	synced: number;
+	targetMaster: boolean;
+	extensionProfile: string;
+	settingsProfile: string;
+	settings: string | ISettings;
+	extensions: any[];
 }

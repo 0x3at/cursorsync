@@ -20,7 +20,7 @@ export interface ILogger {
 	) => Promise<MessageItem | undefined>;
 	error: (msg: string, notify: boolean) => Promise<string | undefined>;
 	log: (msg: string) => void;
-	debug: (msg: string) => void;
+	debug: (msg: string | any[]) => void;
 	show: () => void;
 	self: LogOutputChannel;
 }
@@ -57,12 +57,18 @@ const Logger = (ctx: ExtensionContext): ILogger => {
 				return await window.showErrorMessage(msg, _errorOpts);
 			}
 		},
-		log: async (msg: string) => {
+		log: (msg: string) => {
 			_logger.info(msg);
 		},
 
-		debug: async (msg: string) => {
-			_logger.debug(msg);
+		debug: (msg: string | any[]) => {
+			if (Array.isArray(msg)) {
+				_logger.debug(
+					msg.map((item) => JSON.stringify(item)).join(' ')
+				);
+			} else {
+				_logger.debug(msg);
+			}
 		},
 		show: () => _logger.show(),
 		self: _logger

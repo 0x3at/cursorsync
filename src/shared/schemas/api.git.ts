@@ -1,5 +1,4 @@
-import { RequestMethod } from '../../domain/network/git';
-import { IDeviceFiles, IExtensionFiles, IGeneralFiles } from './content';
+import { IExtensionFiles, IReferenceFiles, ISettingsFiles } from './content';
 
 export interface IGist {
 	url: string;
@@ -10,7 +9,7 @@ export interface IGist {
 	gitPullUrl: string;
 	gitPushUrl: string;
 	htmlUrl: string;
-	files: IGeneralFiles | IDeviceFiles | IExtensionFiles;
+	files: IReferenceFiles | ISettingsFiles | IExtensionFiles;
 	public: boolean;
 	createdAt: number;
 	updatedAt: string;
@@ -56,7 +55,12 @@ export interface IFiles<T> {
 	encoding: string;
 }
 export interface IRequestOpts {
-	method?: RequestMethod;
+	method?: 'P' | 'U' | 'G';
 	payload?: any;
 	endpoint?: string;
+}
+export interface IResult<T = any> {
+	success: boolean;
+	data?: T;
+	error?: any;
 }

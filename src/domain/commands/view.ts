@@ -73,21 +73,21 @@ export const createGistTreeProvider = (core: ICore) => {
 			// Ensure we have the latest section data
 			if (!sections.general && core.generalGistID.get()) {
 				sections.general = await core.controller.section({
-					key: ExtensionKeys.generalGist,
+					key: ExtensionKeys.referenceGist,
 					id: core.generalGistID.get()
 				});
 			}
 
 			if (!sections.device && core.devicesGistID.get()) {
 				sections.device = await core.controller.section({
-					key: ExtensionKeys.deviceGist,
+					key: ExtensionKeys.settingsCollection,
 					id: core.devicesGistID.get()
 				});
 			}
 
 			if (!sections.extensions && core.extensionsGistID.get()) {
 				sections.extensions = await core.controller.section({
-					key: ExtensionKeys.extensionGist,
+					key: ExtensionKeys.extensionCollection,
 					id: core.extensionsGistID.get()
 				});
 			}
