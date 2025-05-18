@@ -2,7 +2,7 @@ import { ExtensionContext, MessageItem, MessageOptions, window } from 'vscode';
 
 import { ExtensionKeys } from '../shared/environment';
 
-export interface LogInterface {
+export interface ILogger {
 	inform: (
 		msg: string,
 		items?: MessageItem[]
@@ -18,7 +18,7 @@ export interface LogInterface {
 	show: () => void;
 }
 
-const Logger = (ctx: ExtensionContext): LogInterface => {
+const Logger = (ctx: ExtensionContext): ILogger => {
 	const _errorOpts: MessageOptions = {
 		modal: false,
 		detail: '🔴 CursorSync Error!'

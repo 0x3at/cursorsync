@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
-import { Uri, window, workspace } from 'vscode';
 import JSON5 from 'json5';
+import { Uri, window } from 'vscode';
 
 export function exists(path: Uri) {
 	return existsSync(path.fsPath);
@@ -55,7 +55,6 @@ export async function updateSettings(path: string, newSettings: {}) {
 	}
 }
 
-// Utility function to safely stringify objects
 export const safeStringify = (obj: any) => {
 	const seen = new WeakSet();
 	return JSON.stringify(
@@ -63,12 +62,12 @@ export const safeStringify = (obj: any) => {
 		(key, value) => {
 			if (typeof value === 'object' && value !== null) {
 				if (seen.has(value)) {
-					return; // Circular reference found, discard key
+					return;
 				}
 				seen.add(value);
 			}
 			return value;
 		},
 		2
-	); // Indentation for readability
+	);
 };

@@ -1,6 +1,6 @@
 import { commands, env } from 'vscode';
 
-import { ContextStore, contextStore } from '../utils/context-store';
+import { createValueStore, IValueStore } from '../utils/stores';
 
 export enum ExtensionKeys {
 	prefix = 'cursorsync',
@@ -8,26 +8,31 @@ export enum ExtensionKeys {
 	deviceGist = 'cursorsync.Devices',
 	extensionGist = 'cursorsync.Exts'
 }
-export const rootPath: ContextStore<string> = contextStore({
-	val: env.appRoot
-});
-
-export const appName: ContextStore<string> = contextStore({
-	val: env.appName
-});
-
-export const machineId: ContextStore<string> = contextStore({
-	val: env.machineId
-});
-
-interface ContextCommand {
+interface IFlagStore {
 	inspect: boolean;
 	activate: () => void;
 	deactivate: () => void;
 	toggle: () => void;
 }
+export interface IFlags {
+	SetupPending: { name: string; methods: IFlagStore };
+	LabelConflict: { name: string; methods: IFlagStore };
+	DevMode: { name: string; methods: IFlagStore };
+}
 
-const contextCommand = (name: string, state?: boolean): ContextCommand => {
+export const rootPath: IValueStore<string> = createValueStore({
+	val: env.appRoot
+});
+
+export const appName: IValueStore<string> = createValueStore({
+	val: env.appName
+});
+
+export const machineId: IValueStore<string> = createValueStore({
+	val: env.machineId
+});
+
+const createFlagStore = (name: string, state?: boolean): IFlagStore => {
 	let _state = state !== undefined ? state : false;
 	return {
 		inspect: _state,
@@ -43,23 +48,17 @@ const contextCommand = (name: string, state?: boolean): ContextCommand => {
 	};
 };
 
-export interface ContextFlags {
-	SetupPending: { name: string; methods: ContextCommand };
-	LabelConflict: { name: string; methods: ContextCommand };
-	DevMode: { name: string; methods: ContextCommand };
-}
-
-export const contextFlags: ContextFlags = {
+export const contextFlags: IFlags = {
 	SetupPending: {
 		name: 'cursorsync.setupIsPending',
-		methods: contextCommand('cursorsync.setupIsPending')
+		methods: createFlagStore('cursorsync.setupIsPending')
 	},
 	LabelConflict: {
 		name: 'cursorsync.labelConflictExists',
-		methods: contextCommand('cursorsync.labelConflictExists')
+		methods: createFlagStore('cursorsync.labelConflictExists')
 	},
 	DevMode: {
 		name: 'cursorsync.inDevMode',
-		methods: contextCommand('cursorsync.inDevMode')
+		methods: createFlagStore('cursorsync.inDevMode')
 	}
 };

@@ -1,9 +1,6 @@
-export type FileSchema = GeneralFiles | DeviceFiles | ExtensionFiles;
-export interface GetGistPayload {
-	getGistPayload: GistOverview[];
-}
+import { IDeviceFiles, IExtensionFiles, IGeneralFiles } from './content';
 
-export interface GistOverview {
+export interface IGist {
 	url: string;
 	forksUrl: string;
 	commitsUrl: string;
@@ -12,7 +9,7 @@ export interface GistOverview {
 	gitPullUrl: string;
 	gitPushUrl: string;
 	htmlUrl: string;
-	files: FileSchema;
+	files: IGeneralFiles | IDeviceFiles | IExtensionFiles;
 	public: boolean;
 	createdAt: number;
 	updatedAt: string;
@@ -21,11 +18,11 @@ export interface GistOverview {
 	user?: any;
 	commentsEnabled: boolean;
 	commentsUrl: string;
-	owner: Owner;
+	owner: IOwner;
 	truncated: boolean;
 }
 
-export interface Owner {
+export interface IOwner {
 	login: string;
 	id: number;
 	nodeId: string;
@@ -47,7 +44,7 @@ export interface Owner {
 	siteAdmin: boolean;
 }
 
-export interface FileOverview<T> {
+export interface IFiles<T> {
 	filename: string;
 	type: string;
 	language: string;
@@ -56,50 +53,4 @@ export interface FileOverview<T> {
 	truncated: boolean;
 	content: T;
 	encoding: string;
-}
-export interface GeneralFiles {
-	['general.json']: FileOverview<GeneralSchema>;
-	['references.json']: FileOverview<ReferenceSchema>;
-}
-
-export interface GeneralSchema {
-	created: number;
-}
-export interface ReferenceSchema {
-	created: number;
-	lastUpdate: number;
-	devices: DeviceRefSchema[];
-}
-export interface DeviceRefSchema {
-	gistID: string;
-	deviceID: string;
-	isMaster: boolean;
-	deviceLabel: string;
-	fileName: string;
-	lastSync: number;
-}
-export interface DeviceFiles {
-	[key: string]: FileOverview<DeviceProfileSchema>;
-}
-export interface DeviceProfileSchema {
-	created: number;
-	deviceId: string;
-	deviceLabel: string;
-	lastSync: number;
-	settings: string | SettingsSchema;
-}
-
-interface SettingsSchema {
-	[key: string]: any;
-}
-
-export interface ExtensionFiles {
-	[key: string]: FileOverview<ExtensionProfileSchema>;
-}
-
-export interface ExtensionProfileSchema {
-	created: number;
-	profile: string;
-	tags: string[];
-	extensions: any[];
 }

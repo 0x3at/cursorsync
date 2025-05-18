@@ -9,18 +9,33 @@ import {
 } from 'vscode';
 
 import { ExtensionKeys, machineId } from '../../shared/environment';
+import { IFiles, IGist } from '../../shared/schemas/api.git';
 import {
-	DeviceProfileSchema,
-	DeviceRefSchema,
-	ExtensionProfileSchema,
-	FileOverview,
-	GeneralSchema,
-	GistOverview,
-	ReferenceSchema
-} from '../../shared/schemas/api.git';
-import { ContextStore } from '../../utils/context-store';
-import { loadSettings } from '../../utils/file.utils';
-import { LogInterface } from '../../utils/logging';
+	IDeviceProfile,
+	IDeviceReference,
+	IExtensionProfile,
+	IGeneralContent,
+	IReferenceContent
+} from '../../shared/schemas/content';
+import { ILogger } from '../../utils/logger';
+import { IValueStore } from '../../utils/stores';
+import { loadSettings } from '../../utils/utils';
+
+export interface IController {
+	session: AuthenticationSession;
+	section: (opts: {
+		key: ExtensionKeys;
+		id?: string;
+	}) => Promise<IGist | null>;
+	call: (opts: {
+		method?: 'P' | 'G';
+		payload?: {};
+		endpoint?: string;
+	}) => Promise<any>;
+	initRemote: () => Promise<{ success: boolean; error?: any }[]>;
+	initDeviceProfile: () => Promise<{ success: boolean; error?: any }>;
+	initExtensionProfile: () => Promise<{ success: boolean; error?: any }>;
+}
 
 export const session = async (): Promise<AuthenticationSession> => {
 	// Request a GitHub session with the 'gist' scope
@@ -73,24 +88,19 @@ const __request = async (
 		throw error;
 	}
 };
-const fileContent = async (
-	file: Partial<
-		FileOverview<GeneralSchema | ReferenceSchema | DeviceProfileSchema>
-	>
-): Promise<GeneralSchema | ReferenceSchema | DeviceProfileSchema> => {
+const getFileContent = async (
+	file: Partial<IFiles<IGeneralContent | IReferenceContent | IDeviceProfile>>
+): Promise<IGeneralContent | IReferenceContent | IDeviceProfile> => {
 	const payload = await axios.get(file.raw_url!);
-	return payload.data as
-		| GeneralSchema
-		| ReferenceSchema
-		| DeviceProfileSchema;
+	return payload.data as IGeneralContent | IReferenceContent | IDeviceProfile;
 };
-const gist = async (id: string): Promise<GistOverview> => {
+const getGist = async (id: string): Promise<IGist> => {
 	try {
-		const res: GistOverview = await __request('G', {}, `gists/${id}`);
+		const res: IGist = await __request('G', {}, `gists/${id}`);
 		await Object.keys(res.files).forEach(async (key: string) => {
-			let f: FileOverview<any> = (res.files as any)[key];
+			let f: IFiles<any> = (res.files as any)[key];
 			if (f.truncated === true) {
-				f.content = await fileContent(f);
+				f.content = await getFileContent(f);
 			}
 		});
 		return res;
@@ -100,54 +110,39 @@ const gist = async (id: string): Promise<GistOverview> => {
 	}
 };
 
-const gists = async (): Promise<GistOverview[]> => {
-	const allGists: GistOverview[] = await __request();
-	const targetGists: GistOverview[] = await Promise.all(
+const getGists = async (): Promise<IGist[]> => {
+	const allGists: IGist[] = await __request();
+	const targetGists: IGist[] = await Promise.all(
 		Array.from(allGists)
 			.filter(
-				(_gist: GistOverview) =>
+				(_gist: IGist) =>
 					_gist.description !== null &&
 					_gist.description!.startsWith(ExtensionKeys.prefix)
 			)
-			.map(async (_gist) => await gist(_gist.id))
+			.map(async (_gist) => await getGist(_gist.id))
 	);
 
 	return targetGists;
 };
 
-export const section = async (opts: {
+export const getSection = async (opts: {
 	key: ExtensionKeys;
 	id?: string;
-}): Promise<GistOverview | null> => {
+}): Promise<IGist | null> => {
 	if (opts.id === undefined) {
-		const list = await gists();
+		const list = await getGists();
 		const tgtGist = list.find(
-			(_gist: GistOverview) =>
+			(_gist: IGist) =>
 				_gist.description !== null &&
 				_gist.description!.startsWith(opts.key)
 		);
 		return tgtGist === undefined ? null : tgtGist;
 	} else {
-		const tgtGist = await gist(opts.id);
+		const tgtGist = await getGist(opts.id);
 		return tgtGist;
 	}
 };
 
-export interface GistController {
-	session: AuthenticationSession;
-	section: (opts: {
-		key: ExtensionKeys;
-		id?: string;
-	}) => Promise<GistOverview | null>;
-	call: (opts: {
-		method?: 'P' | 'G';
-		payload?: {};
-		endpoint?: string;
-	}) => Promise<any>;
-	initRemote: () => Promise<{ success: boolean; error?: any }[]>;
-	initDeviceProfile: () => Promise<{ success: boolean; error?: any }>;
-	initExtensionProfile: () => Promise<{ success: boolean; error?: any }>;
-}
 const createSection = async (
 	call: CallableFunction,
 	opts: {
@@ -160,7 +155,7 @@ const createSection = async (
 		public: false,
 		files: opts.files
 	};
-	const res: GistOverview = await call({
+	const res: IGist = await call({
 		method: 'P',
 		payload: payload
 	});
@@ -168,8 +163,8 @@ const createSection = async (
 };
 const createGeneral = async (
 	call: CallableFunction,
-	deviceLabel: ContextStore<string>,
-	generalGistID: ContextStore<string>
+	deviceLabel: IValueStore<string>,
+	generalGistID: IValueStore<string>
 ) => {
 	try {
 		const _machineId = machineId.get();
@@ -179,7 +174,7 @@ const createGeneral = async (
 			['general.json']: {
 				content: JSON.stringify({
 					created: _timestamp
-				} as GeneralSchema)
+				} as IGeneralContent)
 			},
 			['references.json']: {
 				content: JSON.stringify({
@@ -192,9 +187,9 @@ const createGeneral = async (
 							deviceLabel: _label,
 							fileName: `${_machineId}.json`,
 							lastSync: _timestamp
-						} as Partial<DeviceRefSchema>
+						} as Partial<IDeviceReference>
 					]
-				} as ReferenceSchema)
+				} as IReferenceContent)
 			}
 		};
 		let res = await createSection(call, {
@@ -210,9 +205,9 @@ const createGeneral = async (
 
 const createDeviceProfile = async (
 	call: CallableFunction,
-	deviceLabel: ContextStore<string>,
-	deviceProfileID: ContextStore<string>,
-	settingsPath: ContextStore<string>
+	deviceLabel: IValueStore<string>,
+	deviceProfileID: IValueStore<string>,
+	settingsPath: IValueStore<string>
 ): Promise<{ success: boolean; error?: any }> => {
 	try {
 		const _machineId = machineId.get();
@@ -227,7 +222,7 @@ const createDeviceProfile = async (
 					deviceLabel: _label,
 					lastSync: _timestamp,
 					settings: JSON.stringify(settings)
-				} as DeviceProfileSchema)
+				} as IDeviceProfile)
 			}
 		};
 
@@ -244,7 +239,7 @@ const createDeviceProfile = async (
 };
 const createExtensionProfile = async (
 	call: CallableFunction,
-	extensionsProfileID: ContextStore<string>
+	extensionsProfileID: IValueStore<string>
 ) => {
 	try {
 		const _timestamp = Date.now();
@@ -258,7 +253,7 @@ const createExtensionProfile = async (
 					profile: 'genesis',
 					tags: ['genesis'],
 					extensions: extensionList
-				} as ExtensionProfileSchema)
+				} as IExtensionProfile)
 			}
 		};
 
@@ -273,14 +268,14 @@ const createExtensionProfile = async (
 		return { success: false, error: error };
 	}
 };
-export const Controller = async (
-	logger: LogInterface,
-	deviceLabel: ContextStore<string>,
-	generalGistID: ContextStore<string>,
-	deviceProfileID: ContextStore<string>,
-	extensionsProfileID: ContextStore<string>,
-	settingsPath: ContextStore<string>
-): Promise<GistController> => {
+export const createController = async (
+	logger: ILogger,
+	deviceLabel: IValueStore<string>,
+	generalGistID: IValueStore<string>,
+	deviceProfileID: IValueStore<string>,
+	extensionsProfileID: IValueStore<string>,
+	settingsPath: IValueStore<string>
+): Promise<IController> => {
 	const _api = __request;
 	const _call = async (opts: {
 		method?: 'P' | 'G';
@@ -293,7 +288,7 @@ export const Controller = async (
 		return {
 			session: _session,
 			section: async (opts: { key: ExtensionKeys; id?: string }) =>
-				await section(opts),
+				await getSection(opts),
 			call: async (opts: {
 				method?: 'P' | 'G';
 				payload?: {};

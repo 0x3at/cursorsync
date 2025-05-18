@@ -1,11 +1,11 @@
 import { commands, Disposable, ExtensionContext } from 'vscode';
 
 import { contextFlags, ExtensionKeys } from '../../shared/environment';
-import { LogInterface } from '../../utils/logging';
+import { ILogger } from '../../utils/logger';
 import { session } from '../network/git';
 
-export const showcontext = (
-	logger: LogInterface,
+export const registerDebugContext = (
+	logger: ILogger,
 	flags: typeof contextFlags
 ): Disposable => {
 	return commands.registerCommand(
@@ -22,9 +22,9 @@ export const showcontext = (
 	);
 };
 
-export const showstate = (
+export const registerDebugState = (
 	ctx: ExtensionContext,
-	logger: LogInterface
+	logger: ILogger
 ): Disposable => {
 	return commands.registerCommand(
 		`${ExtensionKeys.prefix}.debug.showstate`,
@@ -38,7 +38,7 @@ export const showstate = (
 	);
 };
 
-export const inspectsession = (logger: LogInterface): Disposable => {
+export const registerDebugSession = (logger: ILogger): Disposable => {
 	return commands.registerCommand(
 		`${ExtensionKeys.prefix}.debug.showsession`,
 		async () => {

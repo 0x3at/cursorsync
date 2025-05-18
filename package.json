@@ -28,12 +28,16 @@
 				"shortTitle": "Discover Settings Path"
 			},
 			{
-				"command": "cursorsync.resetContextKeys",
-				"title": "CursorSync: Reset Context Keys"
+				"command": "cursorsync.debug.showsession",
+				"title": "CursorSync: Inspect Context Keys"
 			},
 			{
-				"command": "cursorsync.showContextKeys",
-				"title": "CursorSync: Show Context Keys"
+				"command": "cursorsync.debug.showstate",
+				"title": "CursorSync: Inspect Global State"
+			},
+			{
+				"command": "cursorsync.debug.showcontext",
+				"title": "CursorSync: Inspect Context Values"
 			}
 		]
 	},

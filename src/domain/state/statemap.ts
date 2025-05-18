@@ -1,43 +1,33 @@
-import { commands, Disposable, ExtensionContext } from 'vscode';
+import { commands, ExtensionContext } from 'vscode';
 
 import {
-	ContextFlags,
 	contextFlags,
 	ExtensionKeys,
 	machineId
 } from '../../shared/environment';
 import {
-	DeviceRefSchema,
-	GistOverview,
-	ReferenceSchema
-} from '../../shared/schemas/api.git';
-import { ContextStore, contextStore } from '../../utils/context-store';
-import { LogInterface } from '../../utils/logging';
-import { showcontext, showstate } from '../commands/debug';
-import { registerSetSettings, registerUpdateLabel } from '../commands/setters';
-import { Controller, GistController } from '../network/git';
+	IDeviceReference,
+	IReferenceContent
+} from '../../shared/schemas/content';
+import {
+	ICore,
+	IDependencies,
+	IRemoteStore,
+	IResult
+} from '../../shared/schemas/state';
+import { ILogger } from '../../utils/logger';
+import { createValueStore, IValueStore } from '../../utils/stores';
+import { registerDebugContext, registerDebugState } from '../commands/debug';
+import {
+	registerUpdateLabel,
+	registerUpdateSettingsLocation
+} from '../commands/setters';
+import { createController, IController } from '../network/git';
 
-interface Result<T = any> {
-	success: boolean;
-	data?: T;
-	error?: any;
-}
-
-interface BuildDependencies {
-	generalGistID: ContextStore<string | undefined>;
-	devicesGistID: ContextStore<string | undefined>;
-	extensionsGistID: ContextStore<string | undefined>;
-	deviceLabel: ContextStore<string | undefined>;
-	settingsPath: ContextStore<string | undefined>;
-	flags: ContextFlags;
-	commands: Disposable[];
-	controller: GistController;
-}
-
-const buildContext = async (
+const buildDependencies = async (
 	ctx: ExtensionContext,
-	logger: LogInterface
-): Promise<Result<BuildDependencies>> => {
+	logger: ILogger
+): Promise<IResult<IDependencies>> => {
 	const dev = true;
 	const flags = contextFlags;
 	// Handle DevMode activation/deactivation
@@ -51,35 +41,35 @@ const buildContext = async (
 	logger.log('Gathering Build Context...');
 
 	// ? Initialize Context Stores
-	const generalGistID = contextStore({
+	const generalGistID = createValueStore({
 		val: ctx.globalState.get('generalGistID'),
 		getter: () => ctx.globalState.get('generalGistID'),
 		setter: (val: string) => ctx.globalState.update('generalGistID', val)
 	});
 	logger.log(`General Gist ID: ${generalGistID.get()}`);
 
-	const devicesGistID = contextStore({
+	const devicesGistID = createValueStore({
 		val: ctx.globalState.get('devicesGistID'),
 		getter: () => ctx.globalState.get('devicesGistID'),
 		setter: (val: string) => ctx.globalState.update('devicesGistID', val)
 	});
 	logger.log(`Device Profile ID: ${devicesGistID.get()}`);
 
-	const extensionsGistID = contextStore({
+	const extensionsGistID = createValueStore({
 		val: ctx.globalState.get('extensionsGistID'),
 		getter: () => ctx.globalState.get('extensionsGistID'),
 		setter: (val: string) => ctx.globalState.update('extensionsGistID', val)
 	});
 	logger.log(`Device Profile ID: ${devicesGistID.get()}`);
 
-	const deviceLabel = contextStore({
+	const deviceLabel = createValueStore({
 		val: ctx.globalState.get('deviceLabel'),
 		getter: () => ctx.globalState.get('deviceLabel'),
 		setter: (val: string) => ctx.globalState.update('deviceLabel', val)
 	});
 	logger.log(`Device Label: ${deviceLabel.get()}`);
 
-	const settingsPath = contextStore({
+	const settingsPath = createValueStore({
 		val: ctx.globalState.get('settingsPath'),
 		getter: () => ctx.globalState.get('settingsPath'),
 		setter: (val: string) => ctx.globalState.update('settingsPath', val)
@@ -87,14 +77,15 @@ const buildContext = async (
 	logger.log(`Settings Path: ${settingsPath.get()}`);
 
 	// ? Initialize Commands
-	const showState = showstate(ctx, logger);
-	const showContext = showcontext(logger, flags);
+	const runDebugState = registerDebugState(ctx, logger);
+	const runDebugContext = registerDebugContext(logger, flags);
 	const runUpdateLabel = registerUpdateLabel(deviceLabel, logger);
-	const runSetSettings = registerSetSettings(settingsPath);
+	const runUpdateSettingsLocation =
+		registerUpdateSettingsLocation(settingsPath);
 
 	try {
 		// ? Initialize API Controller
-		const controller = await Controller(
+		const controller = await createController(
 			logger,
 			deviceLabel,
 			generalGistID,
@@ -112,31 +103,31 @@ const buildContext = async (
 				settingsPath: settingsPath,
 				flags: flags,
 				commands: [
-					showState,
-					showContext,
+					runDebugState,
+					runDebugContext,
 					runUpdateLabel,
-					runSetSettings
+					runUpdateSettingsLocation
 				],
 				controller: controller
 			}
-		} as Result<BuildDependencies>;
+		} as IResult<IDependencies>;
 	} catch (error) {
 		logger.error(`Could not connect to Github: ${error}`, true);
 		return {
 			success: false,
 			error: `Could not connect to Github: ${error}`
-		} as Result<BuildDependencies>;
+		} as IResult<IDependencies>;
 	}
 };
 
-const preBuildHooks = async (
-	controller: GistController,
-	generalGistID: ContextStore<string | undefined>,
-	devicesGistID: ContextStore<string | undefined>,
-	extensionsGistID: ContextStore<string | undefined>,
-	deviceLabel: ContextStore<string | undefined>,
-	settingsPath: ContextStore<string | undefined>,
-	logger: LogInterface
+const assembleBuildHooks = async (
+	controller: IController,
+	generalGistID: IValueStore<string | undefined>,
+	devicesGistID: IValueStore<string | undefined>,
+	extensionsGistID: IValueStore<string | undefined>,
+	deviceLabel: IValueStore<string | undefined>,
+	settingsPath: IValueStore<string | undefined>,
+	logger: ILogger
 ) => {
 	logger.debug('Building PreBuild Hooks...');
 	if (generalGistID.get() === undefined) {
@@ -154,9 +145,9 @@ const preBuildHooks = async (
 			devicesGistID.get() === undefined
 				? (
 						_gist!.files['references.json']
-							.content as ReferenceSchema
+							.content as IReferenceContent
 				  ).devices.find(
-						(reference: DeviceRefSchema) =>
+						(reference: IDeviceReference) =>
 							reference.deviceID === machineId.get()
 				  )
 				: devicesGistID.get()
@@ -207,18 +198,11 @@ const preBuildHooks = async (
 	return hooks;
 };
 
-interface BuildResults {
-	generalGist: GistOverview | null;
-	deviceGist: GistOverview | null;
-	extensionsGist: GistOverview | null;
-}
-const build = async (
-	controller: GistController,
-	generalGistID: ContextStore<string | undefined>,
-	devicesGistID: ContextStore<string | undefined>,
-	deviceLabel: ContextStore<string | undefined>,
-	settingsPath: ContextStore<string | undefined>,
-	logger: LogInterface
+const pullRemote = async (
+	controller: IController,
+	generalGistID: IValueStore<string | undefined>,
+	devicesGistID: IValueStore<string | undefined>,
+	logger: ILogger
 ) => {
 	{
 		try {
@@ -258,7 +242,7 @@ const build = async (
 					deviceGist: device,
 					extensionsGist: extensions
 				}
-			} as Result<BuildResults>;
+			} as IResult<IRemoteStore>;
 		} catch (error) {
 			logger.debug(`Error occurred during build process: ${error}`);
 			return {
@@ -269,25 +253,11 @@ const build = async (
 	}
 };
 
-interface ExtensionStateDependencies {
-	controller: GistController;
-	deviceLabel: ContextStore<string | undefined>;
-	settingsPath: ContextStore<string | undefined>;
-	generalGistID: ContextStore<string | undefined>;
-	generalGist: GistOverview | null;
-	devicesGistID: ContextStore<string | undefined>;
-	deviceGist: GistOverview | null;
-	extensionsGistID: ContextStore<string | undefined>;
-	extensionsGist: GistOverview | null;
-	disposables: Disposable[];
-	flags: ContextFlags;
-}
-
-export const extensionstate = async (
+export const buildExtensionCore = async (
 	ctx: ExtensionContext,
-	logger: LogInterface
-): Promise<Result<ExtensionStateDependencies>> => {
-	const contextresult: Result<BuildDependencies> = await buildContext(
+	logger: ILogger
+): Promise<IResult<ICore>> => {
+	const contextresult: IResult<IDependencies> = await buildDependencies(
 		ctx,
 		logger
 	);
@@ -304,9 +274,9 @@ export const extensionstate = async (
 		flags,
 		commands,
 		controller
-	} = contextresult.data! as BuildDependencies;
+	} = contextresult.data! as IDependencies;
 
-	let hooks = await preBuildHooks(
+	let hooks = await assembleBuildHooks(
 		controller,
 		generalGistID,
 		devicesGistID,
@@ -325,12 +295,10 @@ export const extensionstate = async (
 	}
 	logger.debug('Completed executing pre build hooks');
 
-	const buildResult = await build(
+	const buildResult = await pullRemote(
 		controller,
 		generalGistID,
 		devicesGistID,
-		deviceLabel,
-		settingsPath,
 		logger
 	);
 
@@ -341,7 +309,7 @@ export const extensionstate = async (
 		logger.debug('Succsesfully Retrieved Cursor Sync Dependencies');
 	}
 
-	const { generalGist, deviceGist, extensionsGist }: BuildResults =
+	const { generalGist, deviceGist, extensionsGist }: IRemoteStore =
 		buildResult.data!;
 
 	return {
