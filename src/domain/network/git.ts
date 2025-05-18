@@ -1,6 +1,5 @@
 import axios from 'axios';
 import {
-	authentication,
 	AuthenticationSession,
 	Extension,
 	extensions,
@@ -23,6 +22,7 @@ import { IResult } from '../../shared/schemas/state';
 import { ILogger } from '../../utils/logger';
 import { IValueStore } from '../../utils/stores';
 import { loadSettings } from '../../utils/utils';
+import { authSession } from '../services/api';
 
 export interface IController {
 	session: AuthenticationSession;
@@ -45,20 +45,6 @@ export interface IController {
 	initExtensionProfile: () => Promise<{ success: boolean; error?: any }>;
 }
 
-export const authSession = async (): Promise<AuthenticationSession> => {
-	// Request a GitHub session with the 'gist' scope
-	try {
-		const session = await authentication.getSession('github', ['gist'], {
-			createIfNone: true
-		});
-
-		return {
-			...session
-		};
-	} catch (error) {
-		throw error;
-	}
-};
 export type RequestMethod = 'G' | 'P' | 'U';
 
 const createApiRequest = async (options: IRequestOpts): Promise<any> => {

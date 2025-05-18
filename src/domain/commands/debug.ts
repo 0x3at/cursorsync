@@ -2,7 +2,7 @@ import { commands, Disposable, ExtensionContext } from 'vscode';
 
 import { contextFlags, ExtensionKeys } from '../../shared/environment';
 import { ILogger } from '../../utils/logger';
-import { authSession } from '../network/git';
+import { authSession } from '../services/api';
 
 export const registerDebugContext = (
 	logger: ILogger,
