@@ -18,22 +18,11 @@ import { createGistService } from './gist';
 import { createConflictService, createSyncService } from './sync';
 
 // Define a type for stateService
-type StateServiceType = {
-	deviceLabel: IValueStore<string>;
+export interface IStateValues {
 	settingsPath: IValueStore<string>;
-	referenceID: IValueStore<string>;
-	extensionCollectionID: IValueStore<string>;
-	extensionProfile: IValueStore<string>;
-	settingsCollectionID: IValueStore<string>;
-	settingsProfile: IValueStore<string>;
-	getState: (
-		key: keyof Omit<StateServiceType, 'getState' | 'setState'>
-	) => string | undefined; // Use keyof Omit to restrict keys
-	setState: (
-		key: keyof Omit<StateServiceType, 'getState' | 'setState'>,
-		value: any
-	) => void; // Use keyof Omit to restrict keys
-};
+	collectionID: IValueStore<string>;
+	activeProfile: IValueStore<string>;
+}
 
 // src/domain/core.ts
 export const createCore = async (
@@ -60,12 +49,12 @@ export const createCore = async (
 		const gistService = createGistService(apiService, logger);
 
 		// Create value stores
-		const stateService: StateServiceType = {
-			deviceLabel: createValueStore({
-				val: ctx.globalState.get('deviceLabel'),
-				getter: () => ctx.globalState.get('deviceLabel'),
+		const stateService: IStateValues = {
+			activeProfile: createValueStore({
+				val: ctx.globalState.get('settingsProfile'),
+				getter: () => ctx.globalState.get('settingsProfile'),
 				setter: (val: string) =>
-					ctx.globalState.update('deviceLabel', val)
+					ctx.globalState.update('settingsProfile', val)
 			}),
 
 			settingsPath: createValueStore({
@@ -74,38 +63,12 @@ export const createCore = async (
 				setter: (val: string) =>
 					ctx.globalState.update('settingsPath', val)
 			}),
-			referenceID: createValueStore({
-				val: ctx.globalState.get('referenceID'),
-				getter: () => ctx.globalState.get('referenceID'),
-				setter: (val: string) =>
-					ctx.globalState.update('referenceID', val)
-			}),
-			settingsCollectionID: createValueStore({
+			collectionID: createValueStore({
 				val: ctx.globalState.get('settingsCollectionID'),
 				getter: () => ctx.globalState.get('settingsCollectionID'),
 				setter: (val: string) =>
 					ctx.globalState.update('settingsCollectionID', val)
-			}),
-			extensionCollectionID: createValueStore({
-				val: ctx.globalState.get('extensionCollectionID'),
-				getter: () => ctx.globalState.get('extensionCollectionID'),
-				setter: (val: string) =>
-					ctx.globalState.update('extensionCollectionID', val)
-			}),
-			settingsProfile: createValueStore({
-				val: ctx.globalState.get('settingsProfile'),
-				getter: () => ctx.globalState.get('settingsProfile'),
-				setter: (val: string) =>
-					ctx.globalState.update('settingsProfile', val)
-			}),
-			extensionProfile: createValueStore({
-				val: ctx.globalState.get('extensionProfile'),
-				getter: () => ctx.globalState.get('extensionProfile'),
-				setter: (val: string) =>
-					ctx.globalState.update('extensionProfile', val)
-			}),
-			getState: (key) => stateService[key]?.get() as string | undefined,
-			setState: (key, value: any) => stateService[key]?.set(value)
+			})
 		};
 
 		// Initiatialize Store Dependent Commands

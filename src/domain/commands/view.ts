@@ -80,7 +80,7 @@ export const createGistTreeProvider = (core: ICore) => {
 
 			if (!sections.device && core.devicesGistID.get()) {
 				sections.device = await core.controller.section({
-					key: ExtensionKeys.settingsCollection,
+					key: ExtensionKeys.collectionIdentifier,
 					id: core.devicesGistID.get()
 				});
 			}

@@ -3,6 +3,8 @@ import { readFile, writeFile } from 'fs/promises';
 import JSON5 from 'json5';
 import { Uri, window } from 'vscode';
 
+import { ISettings } from '../shared/schemas/profile';
+
 export function exists(path: Uri) {
 	return existsSync(path.fsPath);
 }
@@ -34,10 +36,10 @@ export const settingsJSON = async (): Promise<Uri[]> => {
 	}
 };
 
-export async function loadSettings(path: string) {
+export async function loadSettings(path: string): Promise<ISettings> {
 	try {
 		const data = await readFile(path, 'utf-8');
-		return JSON5.parse(data);
+		return JSON5.parse(data) as ISettings;
 	} catch (error) {
 		console.error(`Error reading JSON file: ${error}`);
 		throw error;

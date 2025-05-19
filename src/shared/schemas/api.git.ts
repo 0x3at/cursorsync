@@ -1,4 +1,4 @@
-import { IExtensionFiles, IReferenceFiles, ISettingsFiles } from './content';
+import { IProfiles } from './profile';
 
 export interface IGist {
 	url: string;
@@ -9,7 +9,7 @@ export interface IGist {
 	gitPullUrl: string;
 	gitPushUrl: string;
 	htmlUrl: string;
-	files: IReferenceFiles | ISettingsFiles | IExtensionFiles;
+	files: IProfiles;
 	public: boolean;
 	createdAt: number;
 	updatedAt: string;

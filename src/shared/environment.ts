@@ -4,9 +4,7 @@ import { createValueStore, IValueStore } from '../utils/stores';
 
 export enum ExtensionKeys {
 	prefix = 'cursorsync',
-	referenceGist = 'cursorsync.general',
-	settingsCollection = 'cursorsync.devices',
-	extensionCollection = 'cursorsync.extensions'
+	collectionIdentifier = 'cursorsync.profiles'
 }
 
 export type StateKey =

@@ -10,10 +10,13 @@ interface IAuthService {
 }
 
 export interface IApiService {
-	get: (endpoint?: string, invalidateCache?: boolean) => Promise<any>;
-	post: (endpoint: string, payload: any) => Promise<any>;
-	update: (endpoint: string, payload: any) => Promise<any>;
-	request: (options: IRequestOpts, invalidateCache?: boolean) => Promise<any>;
+	get: <T>(endpoint?: string, invalidateCache?: boolean) => Promise<T>;
+	post: <T>(endpoint: string, payload: any) => Promise<T>;
+	update: <T>(endpoint: string, payload: any) => Promise<T>;
+	request: <T>(
+		options: IRequestOpts,
+		invalidateCache?: boolean
+	) => Promise<T>;
 }
 export const authSession = async (): Promise<AuthenticationSession> => {
 	try {
@@ -63,10 +66,10 @@ export const createApiService = (
 	// Simple request cache
 	const cache = new Map<string, { data: any; timestamp: number }>();
 
-	const request = async (
+	const request = async <T>(
 		options: IRequestOpts,
 		invalidateCache: boolean = false
-	): Promise<any> => {
+	): Promise<T> => {
 		const { method = 'G', payload, endpoint = 'gists' } = options;
 		const url = `https://api.github.com/${endpoint}`;
 		const cacheKey = `${method}-${url}-${JSON.stringify(payload || {})}`;
@@ -119,7 +122,7 @@ export const createApiService = (
 				logger.debug(`Cached response for ${url}`);
 			}
 
-			return response.data;
+			return response.data as T;
 		} catch (error) {
 			logger.error(`API request failed to ${url}: ${error}`, false);
 			throw error;
@@ -127,12 +130,12 @@ export const createApiService = (
 	};
 
 	return {
-		get: async (endpoint?: string, invalidateCache?: boolean) =>
-			request({ method: 'G', endpoint }, invalidateCache),
-		post: async (endpoint: string, payload: any) =>
-			request({ method: 'P', endpoint, payload }),
-		update: async (endpoint: string, payload: any) =>
-			request({ method: 'U', endpoint, payload }),
+		get: async <T>(endpoint?: string, invalidateCache?: boolean) =>
+			request<T>({ method: 'G', endpoint }, invalidateCache),
+		post: async <T>(endpoint: string, payload: any) =>
+			request<T>({ method: 'P', endpoint, payload }),
+		update: async <T>(endpoint: string, payload: any) =>
+			request<T>({ method: 'U', endpoint, payload }),
 		request
 	};
 };
