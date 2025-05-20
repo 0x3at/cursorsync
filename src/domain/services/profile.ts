@@ -68,7 +68,9 @@ export const createProfileService = async (
 		profileName: string
 	): Promise<IResult<any>> => {
 		try {
-			logger.debug(`Switching to profile: ${profileName}`);
+			logger.debug(
+				`Call made to switch profile with profile ${profileName}`
+			);
 
 			// Get all available profiles
 			const profilesResult = await getAvailableProfiles(true);

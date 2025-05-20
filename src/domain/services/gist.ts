@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 import { ExtensionKeys } from '../../shared/environment';
 import { IGist, IResult } from '../../shared/schemas/api.git';
@@ -62,6 +62,9 @@ export const createGistService = (
 		opts: IgetProfileOpts
 	): Promise<IResult<IProfile>> => {
 		try {
+			logger.debug(
+				`Gist Service attempting to get profile ${profileName}`
+			);
 			const gist: IGist =
 				opts.gist || (await apiService.get<IGist>(`gists/${opts.id}`));
 			const file = gist!.files[`${profileName}.json`];
@@ -70,7 +73,9 @@ export const createGistService = (
 			return { success: true, data: response.data! };
 		} catch (error) {
 			logger.error(
-				`Failed to fetch profile ${profileName}: ${error}`,
+				`Failed to fetch profile ${profileName}:code = ${
+					(error as AxiosError).response
+				}\nresponse = ${(error as AxiosError).response}`,
 				false
 			);
 			return { success: true, error: error };
@@ -157,10 +162,7 @@ export const createGistService = (
 				const profileList: IGist = await apiService.post('gists', {
 					description: ExtensionKeys.collectionIdentifier,
 					files: {
-						[`default.json`]: {
-							content: JSON.stringify(profile as IProfile)
-						},
-						[`${profile.profileName}}.json`]: {
+						[`${profile.profileName}.json`]: {
 							content: JSON.stringify(profile as IProfile)
 						}
 					}
@@ -219,7 +221,7 @@ export const createGistService = (
 						description: ExtensionKeys.collectionIdentifier,
 						public: false,
 						files: {
-							[profile.profileName]: {
+							[`${profile.profileName}.json`]: {
 								content: JSON.stringify(profile)
 							}
 						}

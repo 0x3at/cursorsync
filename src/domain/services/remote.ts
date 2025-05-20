@@ -104,7 +104,7 @@ export const createRemoteService = (
 		opts: IgetProfileOpts,
 		profileName?: string
 	): Promise<IResult<IProfile>> => {
-		logger.debug('Pulling profile from remote');
+		logger.debug(`Pulling profile from remote ${profileName}`);
 		profileName = profileName || `default`;
 		return await gistService.getProfile(profileName, opts);
 	};
@@ -134,6 +134,7 @@ export const createRemoteService = (
 		try {
 			logger.debug('Getting all remote data');
 			const listResult = await pullProfileList();
+			logger.debug(`Obtained Profile List ${listResult}`);
 			if (!listResult.success) {
 				return listResult;
 			}
@@ -146,6 +147,9 @@ export const createRemoteService = (
 			const fullList: IProfile[] = (
 				await Promise.all(
 					listResult.data!.map(async (name: string) => {
+						logger.debug(
+							`Obtaining Profile Data for profile ${name}`
+						);
 						const result = await pullProfile({
 							gist: gistResult.data!
 						} as IgetProfileOpts);

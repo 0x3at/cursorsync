@@ -1,8 +1,8 @@
 import { commands, ExtensionContext, window } from 'vscode';
 
 import { ILogger } from '../../utils/logger';
-import { ILocalService } from '../services/local';
 import { IExtensionCore } from '../services/core';
+import { ILocalService } from '../services/local';
 
 export const registerCommands = (
 	context: ExtensionContext,
@@ -35,37 +35,54 @@ export const registerCommands = (
 		}),
 		commands.registerCommand('cursorsync.switchProfile', async () => {
 			try {
+				// Get current active profile
+				const activeProfileName = core.activeProfile.get();
+
+				// Get available profiles
 				const profilesResult =
 					await core.services.profile.getAvailableProfiles();
 				if (!profilesResult.success) {
 					throw new Error(profilesResult.error);
 				}
 
-				const profiles = profilesResult.data!;
+				// Get profiles as string[] and filter out the active profile
+				let profiles = profilesResult.data as string[];
+				profiles = profiles.filter(
+					(name) => name !== activeProfileName
+				);
+
 				if (profiles.length === 0) {
 					window.showInformationMessage(
-						'No profiles available. Create one first.'
+						'No other profiles available to switch to.'
 					);
 					return;
 				}
 
-				const selected = await window.showQuickPick(
-					profiles as string[],
-					{
-						placeHolder: 'Select a profile to switch to'
-					}
-				);
+				// Create QuickPickItems for better display
+				const items = profiles.map((name) => ({
+					label: name
+				}));
 
-				if (!selected) {
-					return;
+				// Show QuickPick and wait for selection
+				const selected = await window.showQuickPick(items, {
+					placeHolder: 'Select a profile to switch to',
+					ignoreFocusOut: true
+				});
+
+				// Handle the selection result
+				if (!selected || !selected['label']) {
+					return; // User cancelled
 				}
+				logger.debug(`Switching to profile: ${selected['label']}`);
 
 				const result = await core.services.profile.switchProfile(
-					selected
+					selected['label']
 				);
 				if (result.success) {
-					logger.inform(`Switched to profile: ${selected}`);
-					commands.executeCommand('cursorsync.refreshGistView');
+					window.showInformationMessage(
+						`Switched to profile: ${selected.label}`
+					);
+					commands.executeCommand('cursorsync.refreshView');
 				} else {
 					throw new Error(result.error);
 				}
