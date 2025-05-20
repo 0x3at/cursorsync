@@ -1,26 +1,49 @@
-import { ExtensionContext } from 'vscode';
+import { commands, ExtensionContext, window } from 'vscode';
 
-import { registerGistTreeView } from './domain/commands/view';
-import { buildExtensionCore } from './domain/state/core';
+import { registerCommands } from './domain/commands/profile';
+import { registerProfileTreeView } from './domain/commands/view';
+import { buildExtensionCore, IExtensionCore } from './domain/services/core';
 import Logger, { ILogger } from './utils/logger';
+import { IResult } from './shared/schemas/api.git';
 
 export async function activate(context: ExtensionContext) {
 	const logger: ILogger = Logger(context);
 	logger.debug('Gathering Extension State');
 
-	const result = await buildExtensionCore(context, logger);
-	if (result.success === false) {
-		await logger.error(
-			'Could not establish remote, killing cursorsync.... ',
-			true
+	try {
+		// Initialize core services
+		const core: IResult<IExtensionCore> = await buildExtensionCore(
+			context,
+			logger
 		);
-	}
-	const cursorSync = result.data!;
+		if (!core.success) {
+			throw new Error(`Core initialization failed: ${core.error}`);
+		}
+		// Register Commands
+		registerCommands(context, core.data!, logger);
+		core.data?.disposables.forEach((d) => context.subscriptions.push(d));
 
-	registerGistTreeView(context, cursorSync);
-	cursorSync.disposables.push(logger.self);
-	cursorSync.disposables.forEach((cmd) => context.subscriptions.push(cmd));
-	logger.debug('CursorSync Build Process Completed');
+		// Register Explorer View
+		registerProfileTreeView(context, core.data!);
+		logger.inform('CursorSync activated successfully');
+	} catch (error) {
+		logger.error(`Activation failed: ${error}`, true);
+		const action = await window.showErrorMessage(
+			'CursorSync failed to activate properly. Would you like to retry or configure settings?',
+			'Retry',
+			'Open Settings'
+		);
+
+		if (action === 'Retry') {
+			// Restart activation process
+			await activate(context);
+		} else if (action === 'Open Settings') {
+			await commands.executeCommand(
+				'workbench.action.openSettings',
+				'cursorsync'
+			);
+		}
+	}
 }
 
 export function deactivate() {}

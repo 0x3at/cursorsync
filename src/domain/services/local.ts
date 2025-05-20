@@ -11,9 +11,10 @@ import { IResult } from '../../shared/schemas/api.git';
 import { IProfile, ISettings } from '../../shared/schemas/profile';
 import { ILogger } from '../../utils/logger';
 import { exists, loadSettings } from '../../utils/utils';
-import { IStateValues } from './state';
+import { IStateValues } from './core';
 
 export interface ILocalService {
+	resetLocalProfile(): Promise<void>;
 	isInitialized(): Promise<IResult<IProfile>>;
 	// Get the current local profile state
 	refreshLocalProfile(): Promise<IResult<IProfile>>;
@@ -67,10 +68,19 @@ export const createLocalService = (
 			logger.debug('Created Local Profile Record');
 		}
 	};
+	const resetLocalProfile = async (): Promise<void> => {
+		await workspace.fs.writeFile(localProfilePath, new Uint8Array());
+		stateValues.activeProfile.set(undefined);
+		logger.debug('Reset Local Profile Record');
+	};
 
 	const isInitialized = async () => {
 		const profile = await refreshLocalProfile();
-		if (profile.data?.profileName) {
+		if (
+			profile.data?.profileName &&
+			stateValues.activeProfile.get() &&
+			stateValues.settingsPath.get()
+		) {
 			return { success: true, date: profile };
 		} else {
 			return { success: false, error: profile.error };
@@ -269,6 +279,7 @@ export const createLocalService = (
 		}
 	};
 	return {
+		resetLocalProfile,
 		isInitialized,
 		startWatching,
 		stopWatching,

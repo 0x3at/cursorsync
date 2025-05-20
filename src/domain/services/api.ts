@@ -4,7 +4,7 @@ import { authentication, AuthenticationSession } from 'vscode';
 import { IRequestOpts } from '../../shared/schemas/api.git';
 import { ILogger } from '../../utils/logger';
 
-interface IAuthService {
+export interface IAuthService {
 	getSession: () => Promise<AuthenticationSession>;
 	isAuthenticated: () => Promise<boolean>;
 }

@@ -79,7 +79,7 @@ export const createGistService = (
 	const findProfileList = async (id?: string): Promise<IResult<IGist>> =>
 		await getGist({
 			id: id,
-			prefix: ExtensionKeys.extensionCollection
+			prefix: ExtensionKeys.collectionIdentifier
 		});
 	const getGist = async (opts: {
 		id?: string;
@@ -87,42 +87,54 @@ export const createGistService = (
 		invalidateCache?: boolean;
 	}): Promise<IResult<IGist>> => {
 		try {
-			switch (opts) {
-				case opts.id:
-					var gistsList: IGist[] = await apiService.get<IGist[]>(
-						`gists/${opts.id}`,
-						opts?.invalidateCache || true
-					);
-					return { success: true, data: targetGist! };
-
-				case opts.prefix as string:
-					var gistsList: IGist[] = await apiService.get<IGist[]>(
-						`gists`,
-						opts?.invalidateCache || true
-					);
-
-					var targetGist: IGist | undefined = gistsList.find(
-						(gist: IGist) =>
-							gist.description?.startsWith(opts.prefix!)
-					);
-
-					return { success: true, data: targetGist! };
-
-				default:
-					var gistsList: IGist[] = await apiService.get<IGist[]>(
-						`gists`,
-						opts?.invalidateCache || true
-					);
-
-					var targetGist: IGist | undefined = gistsList.find(
-						(gist: IGist) =>
-							gist.description?.startsWith(
-								ExtensionKeys.collectionIdentifier
-							)
-					);
-
-					return { success: true, data: targetGist! };
+			// If id is provided, fetch that specific gist
+			if (opts.id) {
+				const gist = await apiService.get<IGist>(
+					`gists/${opts.id}`,
+					opts.invalidateCache || true
+				);
+				return { success: true, data: gist };
 			}
+
+			// If prefix is provided, search for gist by description prefix
+			if (opts.prefix) {
+				const gistsList = await apiService.get<IGist[]>(
+					'gists',
+					opts.invalidateCache || true
+				);
+
+				const targetGist = gistsList.find((gist: IGist) =>
+					gist.description?.startsWith(opts.prefix!)
+				);
+
+				if (targetGist) {
+					return { success: true, data: targetGist };
+				}
+
+				return {
+					success: false,
+					error: `No gist found with prefix ${opts.prefix}`
+				};
+			}
+
+			// Default: look for collection identifier
+			const gistsList = await apiService.get<IGist[]>(
+				'gists',
+				opts.invalidateCache || true
+			);
+
+			const targetGist = gistsList.find((gist: IGist) =>
+				gist.description?.startsWith(ExtensionKeys.collectionIdentifier)
+			);
+
+			if (targetGist) {
+				return { success: true, data: targetGist };
+			}
+
+			return {
+				success: false,
+				error: 'No profile collection gist found'
+			};
 		} catch (error) {
 			logger.error(
 				`Failed to fetch gists with prefix ${JSON.stringify(

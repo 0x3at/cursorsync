@@ -1,8 +1,8 @@
 import { IGist, IResult } from '../../shared/schemas/api.git';
 import { IProfile } from '../../shared/schemas/profile';
 import { ILogger } from '../../utils/logger';
+import { IStateValues } from './core';
 import { IgetProfileOpts, IGistService, IupdateProfileOpts } from './gist';
-import { IStateValues } from './state';
 
 export interface IRemoteService {
 	// Get reference gist

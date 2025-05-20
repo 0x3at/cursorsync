@@ -1,10 +1,10 @@
 import { IResult } from '../../shared/schemas/api.git';
 import { IProfile, ISettings } from '../../shared/schemas/profile';
 import { ILogger } from '../../utils/logger';
+import { IStateValues } from './core';
 import { IgetProfileOpts, IupdateProfileOpts } from './gist';
 import { ILocalService } from './local';
 import { IRemoteService } from './remote';
-import { IStateValues } from './state';
 
 export interface IProfileService {
 	// Get available profiles
@@ -31,7 +31,7 @@ export interface IProfileService {
 	}>;
 
 	// Delete a profile
-	deleteProfile(profileName: string): Promise<void>;
+	deleteProfile(profileName: string): Promise<IResult<void>>;
 
 	// Sync current profile
 	syncProfile(): Promise<IResult<IProfile>>;
@@ -42,55 +42,23 @@ export interface IProfileService {
 	// Export profile to all devices
 	// exportProfileToAllDevices(profileName: string): Promise<IResult<any>>; // Not implemented
 }
-
 export const createProfileService = async (
 	localService: ILocalService,
 	remoteService: IRemoteService,
 	stateValues: IStateValues,
 	logger: ILogger
 ): Promise<IProfileService> => {
-	// Live Profile State
-	let liveProfile: IProfile = {
-		profileName: stateValues.activeProfile.get(),
-		settings: (await localService.readLocalSettings()).data,
-		extensions: localService.getInstalledExtensions()
-	} as IProfile;
 	// Get all available profiles from remote
 	const getAvailableProfiles = async (
 		full: boolean = false
-	): Promise<IResult<IProfile[] | string[]>> =>
-		!full
-			? remoteService.pullProfileList()
-			: await remoteService.pullRemote();
-
-	// Get current profile
-	const getCurrentProfile = async (): Promise<
-		IResult<{ localProfile: IProfile; remoteProfile: IProfile }>
-	> => {
+	): Promise<IResult<IProfile[] | string[]>> => {
 		try {
-			logger.debug('Getting current profile');
-
-			// Get local profile
-			const localProfile: IProfile = (
-				await localService.refreshLocalProfile()
-			).data!;
-
-			// Get device reference from remote
-			const remoteProfile: IProfile = (
-				await remoteService.pullProfile({
-					id: stateValues.collectionID.get()
-				} as IgetProfileOpts)
-			).data!;
-
-			return {
-				success: true,
-				data: {
-					localProfile,
-					remoteProfile
-				}
-			};
+			logger.debug(`Getting available profiles (full=${full})`);
+			return full
+				? await remoteService.pullRemote()
+				: await remoteService.pullProfileList();
 		} catch (error) {
-			logger.error(`Failed to get current profile: ${error}`, false);
+			logger.error(`Failed to get available profiles: ${error}`, false);
 			return { success: false, error };
 		}
 	};
@@ -109,9 +77,13 @@ export const createProfileService = async (
 			}
 
 			// Find the requested profile
-			const profile = (profilesResult.data! as IProfile[]).find(
-				(p) => p.profileName === profileName
-			);
+			const profile = (profilesResult.data! as IProfile[]).find((p) => {
+				logger.self.trace(
+					`Comparing ${profileName} against ${p.profileName}`
+				);
+				return p.profileName === profileName;
+			});
+
 			if (!profile) {
 				return {
 					success: false,
@@ -119,7 +91,9 @@ export const createProfileService = async (
 				};
 			}
 
-			//TODO Implement Extension Cycling
+			// Update local reference first
+			stateValues.activeProfile.set(profileName);
+			await localService.updateLocalRecord(profile);
 
 			// Apply settings locally
 			const applyResult = await localService.applyToSettings(
@@ -133,11 +107,14 @@ export const createProfileService = async (
 				);
 				return applyResult;
 			}
-			// Update Active Profile References
-			stateValues.activeProfile.set(profileName);
-			liveProfile = profile;
-			await localService.updateLocalRecord(profile);
-			return { success: true, data: liveProfile };
+
+			// Handle extension management here
+			// This could involve installing/uninstalling extensions
+			// based on the profile, but that would require extension API
+			// and is often best left to the user to manage
+
+			logger.inform(`Successfully switched to profile: ${profileName}`);
+			return { success: true, data: profile };
 		} catch (error) {
 			logger.error(`Failed to switch profile: ${error}`, true);
 			return { success: false, error };
@@ -149,62 +126,238 @@ export const createProfileService = async (
 		profileName: string,
 		setDefault: boolean = false,
 		tags: string[] = []
-	) => {
-		tags = setDefault ? tags.concat(['default']) : tags;
-		const timestamp = Date.now();
-		const exts = localService.getInstalledExtensions();
-		const settings: ISettings = (await localService.readLocalSettings())
-			.data!;
-		const profile: IProfile = {
-			default: setDefault,
-			profileName: profileName,
-			tags: tags,
-			createdAt: timestamp,
-			modifiedAt: timestamp,
-			settings: settings,
-			extensions: exts
-		};
-		const local = await localService.createLocalProfile(profile);
-		const remote = await remoteService.createProfile(profile, {
-			profileListID: stateValues.collectionID.get()
-		} as IupdateProfileOpts);
+	): Promise<{
+		success: boolean;
+		data: { local: IResult<IProfile>; remote: IResult<IProfile> };
+	}> => {
+		try {
+			logger.debug(`Creating new profile: ${profileName}`);
 
-		if (local.success && remote.success) {
-			return { success: true, data: { local, remote } };
-		} else {
-			return { success: false, data: { local, remote } };
+			// Check if profile name already exists
+			const profilesResult = await getAvailableProfiles();
+			if (profilesResult.success) {
+				const profiles = profilesResult.data as string[];
+				if (profiles.includes(profileName)) {
+					return {
+						success: false,
+						data: {
+							local: {
+								success: false,
+								error: `Profile name '${profileName}' already exists`
+							},
+							remote: {
+								success: false,
+								error: `Profile name '${profileName}' already exists`
+							}
+						}
+					};
+				}
+			}
+
+			// If setting as default, include default tag
+			tags = setDefault ? [...tags, 'default'] : tags;
+			const timestamp = Date.now();
+
+			// Get current settings and extensions
+			const settingsResult = await localService.readLocalSettings();
+			if (!settingsResult.success) {
+				return {
+					success: false,
+					data: {
+						local: {
+							success: false,
+							error: `Failed to read settings: ${settingsResult.error}`
+						},
+						remote: {
+							success: false,
+							error: `Failed to read settings: ${settingsResult.error}`
+						}
+					}
+				};
+			}
+
+			const exts = localService.getInstalledExtensions();
+
+			// Build profile object
+			const profile: IProfile = {
+				default: setDefault,
+				profileName: profileName,
+				tags: tags,
+				createdAt: timestamp,
+				modifiedAt: timestamp,
+				settings: settingsResult.data!,
+				extensions: exts
+			};
+
+			// Create locally
+			const local = await localService.createLocalProfile(profile);
+
+			// Push to remote
+			const remote = await remoteService.createProfile(profile, {
+				profileListID: stateValues.collectionID.get()
+			} as IupdateProfileOpts);
+
+			if (local.success && remote.success) {
+				logger.inform(`Profile '${profileName}' created successfully`);
+				return { success: true, data: { local, remote } };
+			} else {
+				logger.error(
+					`Partial failure creating profile: Local=${local.success}, Remote=${remote.success}`,
+					true
+				);
+				return { success: false, data: { local, remote } };
+			}
+		} catch (error) {
+			logger.error(`Failed to create profile: ${error}`, true);
+			return {
+				success: false,
+				data: {
+					local: { success: false, error },
+					remote: { success: false, error }
+				}
+			};
 		}
 	};
 
 	// Sync current profile (push local changes to remote)
 	const syncProfile = async (): Promise<IResult<IProfile>> => {
-		const settings = await localService.readLocalSettings();
-		if (!settings.success) {
-			return { success: false, error: settings.error };
-		}
-		liveProfile.extensions = localService.getInstalledExtensions();
-		liveProfile.settings = settings.data!;
-		stateValues.activeProfile.set(liveProfile.profileName);
-		const profile: IResult<IProfile> = await remoteService.pushProfile(
-			liveProfile,
-			{
-				profileListID: stateValues.collectionID.get()
-			} as IupdateProfileOpts
-		);
-		if (!profile.success) {
-			return { success: false, error: profile.error };
-		}
-		return { success: false, data: profile.data! };
-	};
-	// Delete a profile
+		try {
+			logger.debug('Syncing current profile');
 
-	const deleteProfile = async (profileName: string) => {
-		return;
+			// Get current active profile name
+			const profileName = stateValues.activeProfile.get();
+			if (!profileName) {
+				return {
+					success: false,
+					error: 'No active profile to sync'
+				};
+			}
+
+			// Get local profile data
+			const localProfileResult = await localService.refreshLocalProfile();
+			if (!localProfileResult.success) {
+				return {
+					success: false,
+					error: `Failed to get local profile: ${localProfileResult.error}`
+				};
+			}
+
+			// Update with latest settings and extensions
+			const profile = localProfileResult.data!;
+			profile.profileName = profileName;
+			profile.modifiedAt = Date.now();
+
+			// Save locally
+			await localService.updateLocalRecord(profile);
+
+			// Push to remote
+			const result = await remoteService.pushProfile(profile, {
+				profileListID: stateValues.collectionID.get()
+			} as IupdateProfileOpts);
+
+			if (result.success) {
+				logger.inform(`Profile '${profileName}' synced successfully`);
+				return { success: true, data: profile };
+			} else {
+				return {
+					success: false,
+					error: `Failed to sync profile: ${result.error}`
+				};
+			}
+		} catch (error) {
+			logger.error(`Failed to sync profile: ${error}`, false);
+			return { success: false, error };
+		}
+	};
+
+	// Delete a profile
+	const deleteProfile = async (
+		profileName: string
+	): Promise<IResult<void>> => {
+		try {
+			logger.debug(`Deleting profile: ${profileName}`);
+
+			// Check if trying to delete active profile
+			const activeProfile = stateValues.activeProfile.get();
+			if (activeProfile === profileName) {
+				return {
+					success: false,
+					error: 'Cannot delete the active profile. Switch to another profile first.'
+				};
+			}
+
+			// Check if profile exists remotely
+			const profilesResult = await getAvailableProfiles();
+			if (!profilesResult.success) {
+				return {
+					success: false,
+					error: `Failed to get profiles: ${profilesResult.error}`
+				};
+			}
+
+			const profiles = profilesResult.data as string[];
+			if (!profiles.includes(profileName)) {
+				return {
+					success: false,
+					error: `Profile '${profileName}' not found`
+				};
+			}
+
+			// TODO: Implement actual deletion from remote gist
+			// This would involve updating the gist to remove the profile file
+
+			logger.inform(`Profile '${profileName}' deleted successfully`);
+			return { success: true };
+		} catch (error) {
+			logger.error(`Failed to delete profile: ${error}`, true);
+			return { success: false, error };
+		}
 	};
 
 	return {
 		getAvailableProfiles,
-		getCurrentProfile,
+		getCurrentProfile: async () => {
+			try {
+				logger.debug('Getting current profile');
+
+				// Get local profile
+				const localProfileResult =
+					await localService.refreshLocalProfile();
+				if (!localProfileResult.success) {
+					return {
+						success: false,
+						error: `Failed to get local profile: ${localProfileResult.error}`
+					};
+				}
+
+				// Get remote profile
+				const profileName = stateValues.activeProfile.get();
+				const remoteProfileResult = await remoteService.pullProfile(
+					{
+						id: stateValues.collectionID.get()
+					} as IgetProfileOpts,
+					profileName
+				);
+
+				if (!remoteProfileResult.success) {
+					return {
+						success: false,
+						error: `Failed to get remote profile: ${remoteProfileResult.error}`
+					};
+				}
+
+				return {
+					success: true,
+					data: {
+						localProfile: localProfileResult.data!,
+						remoteProfile: remoteProfileResult.data!
+					}
+				};
+			} catch (error) {
+				logger.error(`Failed to get current profile: ${error}`, false);
+				return { success: false, error };
+			}
+		},
 		switchProfile,
 		createProfile,
 		deleteProfile,

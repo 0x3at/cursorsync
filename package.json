@@ -17,8 +17,8 @@
 		"views": {
 			"explorer": [
 				{
-					"id": "cursorsync.gistView",
-					"name": "CursorSync Gists"
+					"id": "cursorsync.profileView",
+					"name": "CursorSync Profiles"
 				}
 			]
 		},
@@ -56,6 +56,42 @@
 			{
 				"command": "cursorsync.reset.state",
 				"title": "CursorSync: Reset Global State"
+			},
+			{
+				"command": "cursorsync.syncNow",
+				"title": "Sync: Sync Now",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.switchProfile",
+				"title": "Sync: Switch Profile",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.createProfile",
+				"title": "Sync: Create New Profile",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.deleteProfile",
+				"title": "Sync: Delete Profile",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.resetLocalProfile",
+				"title": "Debug: Reset Local Profile Record",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.showMenu",
+				"title": "Sync: Show Menu",
+				"category": "CursorSync"
+			},
+			{
+				"command": "cursorsync.refreshGistView",
+				"title": "Sync: Refresh View",
+				"category": "CursorSync",
+				"icon": "$(refresh)"
 			}
 		],
 		"menus": {

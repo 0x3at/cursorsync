@@ -1,7 +1,8 @@
 import { Disposable, ExtensionContext, window } from 'vscode';
+import * as vscode from 'vscode';
 
 import { contextFlags } from '../../shared/environment';
-import { IProfile } from '../../shared/schemas/profile';
+import { IProfile, IProfiles } from '../../shared/schemas/profile';
 import { ILogger } from '../../utils/logger';
 import { createValueStore, IValueStore } from '../../utils/stores';
 import {
@@ -11,11 +12,21 @@ import {
 	registerResetState
 } from '../commands/debug';
 import { registerUpdateSettingsLocation } from '../commands/set';
-import { createApiService, createAuthService } from '../services/api';
-import { createGistService } from '../services/gist';
-import { createLocalService } from '../services/local';
-import { createProfileService } from '../services/profile';
-import { createRemoteService } from '../services/remote';
+import {
+	createApiService,
+	createAuthService,
+	IApiService,
+	IAuthService
+} from '../services/api';
+import {
+	createGistService,
+	IGistService,
+	IupdateProfileOpts
+} from '../services/gist';
+import { createLocalService, ILocalService } from '../services/local';
+import { createProfileService, IProfileService } from '../services/profile';
+import { createRemoteService, IRemoteService } from '../services/remote';
+import { IResult } from '../../shared/schemas/api.git';
 
 export interface IStateValues {
 	activeProfile: IValueStore<string>;
@@ -23,10 +34,25 @@ export interface IStateValues {
 	settingsPath: IValueStore<string>;
 }
 
+export interface IExtensionCore {
+	settingsPath: IValueStore<string>;
+	activeProfile: IValueStore<string>;
+	collectionID: IValueStore<string>;
+	services: {
+		auth: IAuthService;
+		api: IApiService;
+		gist: IGistService;
+		local: ILocalService;
+		remote: IRemoteService;
+		profile: IProfileService;
+	};
+	disposables: Disposable[];
+}
+
 export const buildExtensionCore = async (
 	context: ExtensionContext,
 	logger: ILogger
-) => {
+): Promise<IResult<IExtensionCore>> => {
 	try {
 		logger.debug('Building extension core');
 
@@ -67,7 +93,6 @@ export const buildExtensionCore = async (
 					context.globalState.update('collectionID', val)
 			})
 		};
-
 		// Deprecated
 		// Initialize store-dependent commands
 		// const runUpdateLabel = registerUpdateLabel(
@@ -78,6 +103,19 @@ export const buildExtensionCore = async (
 		const runUpdateSettingsLocation = registerUpdateSettingsLocation(
 			stateValues.settingsPath
 		);
+
+		if (!stateValues.settingsPath.get()) {
+			await vscode.commands.executeCommand(
+				'cursorsync.update.settingspath'
+			);
+		}
+		const commands: Disposable[] = [
+			runDebugContext,
+			runDebugState,
+			runResetState,
+			runDebugSession,
+			runUpdateSettingsLocation
+		];
 
 		// Initialize services
 		const authService = createAuthService(logger);
@@ -91,79 +129,236 @@ export const buildExtensionCore = async (
 			logger,
 			stateValues
 		);
-		const profileService = createProfileService(
+		const profileService = await createProfileService(
 			localService,
 			remoteService,
 			stateValues,
 			logger
 		);
-		const initLocal = await localService.isInitialized();
-		const initRemote = await remoteService.isInitialized();
-		if (!initLocal.success) {
-			// If Remote Does not exist create profile
-			if (!initRemote) {
-				// Get Profile Name
-				// If Undefined should be a substring of the machineId.get()
-				const profileName: string | undefined =
-					await window.showInputBox();
-				// ask the user if they want to add optional tags
-				// comma dellimited string parsed into a list
-				const tagstring: string | undefined =
-					await window.showInputBox();
+		const isLocalInitialized = await localService.isInitialized();
+		const isRemoteInitialized = await remoteService.isInitialized();
+
+		logger.debug(
+			`Local initialized: ${isLocalInitialized.success}, Remote initialized: ${isRemoteInitialized}`
+		);
+
+		// Handle four possible scenarios
+		if (isLocalInitialized.success && isRemoteInitialized) {
+			// 1. Both local and remote are initialized - normal operation
+			logger.inform('CursorSync is ready and synchronized');
+
+			// Start file watcher
+			localService.startWatching();
+		} else if (isLocalInitialized.success && !isRemoteInitialized) {
+			// 2. Local exists but remote doesn't - ask to create remote
+			const shouldCreateRemote = await window.showQuickPick(
+				['Yes, create remote profiles', 'No, keep local only'],
+				{
+					placeHolder:
+						'Local profile exists but no remote. Create remote profile list?'
+				}
+			);
+
+			if (shouldCreateRemote === 'Yes, create remote profiles') {
+				// Use existing local profile to initialize remote
+				const localProfile = isLocalInitialized.data!;
+				const remoteResult = await remoteService.initializeRemote(
+					localProfile
+				);
+
+				if (remoteResult.success) {
+					logger.inform(
+						'Remote profile collection created successfully'
+					);
+					stateValues.collectionID.set(remoteResult.data!.id);
+					localService.startWatching();
+				} else {
+					throw new Error(
+						`Failed to create remote profile: ${remoteResult.error}`
+					);
+				}
+			} else {
+				logger.inform('Continuing with local profile only');
+				localService.startWatching();
+			}
+		} else if (!isLocalInitialized.success && isRemoteInitialized) {
+			// 3. Remote exists but local doesn't - ask to use existing or create new
+			const profileList = await remoteService.pullProfileList();
+
+			if (!profileList.success) {
+				throw new Error(
+					`Failed to pull profile list: ${profileList.error}`
+				);
+			}
+
+			// Only offer to create new if we have the profile list
+			const options = ['Create new profile', ...profileList.data!];
+			const selection = await window.showQuickPick(options, {
+				placeHolder: 'Select a profile or create a new one'
+			});
+
+			if (!selection) {
+				throw new Error('Profile selection was cancelled');
+			}
+
+			if (selection === 'Create new profile') {
+				// Create new profile flow
+				const profileName = await window.showInputBox({
+					placeHolder: 'Enter a name for your new profile',
+					prompt: 'Profile names should be descriptive (e.g., "Work", "Personal")'
+				});
+
+				if (!profileName) {
+					throw new Error('Profile name is required');
+				}
+
+				// Ask for optional tags
+				const tagString = await window.showInputBox({
+					placeHolder: 'Optional: Enter tags separated by commas',
+					prompt: 'Tags help you organize profiles (e.g., "work,development")'
+				});
+
+				const tags = tagString
+					? tagString.split(',').map((t) => t.trim())
+					: [];
+
+				// Create profile
 				const settingsResult = await localService.readLocalSettings();
 				if (!settingsResult.success) {
-					// return error result
+					throw new Error(
+						`Failed to read settings: ${settingsResult.error}`
+					);
 				}
-				const tags: string[] = String(tagstring).split(`,`);
-				const hotProfile: IProfile = {
-					createdAt: Date.now(),
-					modifiedAt: Date.now(),
+
+				const profile: IProfile = {
+					default: false,
 					profileName: profileName,
 					tags: tags,
-					extensions: localService.getInstalledExtensions(),
-					settings: settingsResult.data!
+					createdAt: Date.now(),
+					modifiedAt: Date.now(),
+					settings: settingsResult.data!,
+					extensions: localService.getInstalledExtensions()
 				};
-				localService.createLocalProfile(hotProfile);
-				remoteService.initializeRemote(hotProfile);
-			} else {
-				// If Remote Exists Pull Profile List
-				// 		Create New Profile
-				// 		or
-				// 		Pull Profile From List
-				const profileList = await remoteService.pullProfileList();
-				const createNew = await window.showQuickPick(['yes', 'no']);
-				if (createNew) {
-					// create profile flow
-				} else {
-					// Select Existing
-					const targetProfile = await window.showQuickPick(
-						profileList.data!
-					);
-					const switchResult = (await profileService).switchProfile(
-						targetProfile as string
+
+				// Create local profile
+				const localResult = await localService.createLocalProfile(
+					profile
+				);
+				if (!localResult.success) {
+					throw new Error(
+						`Failed to create local profile: ${localResult.error}`
 					);
 				}
+
+				// Push to remote
+				const remoteResult = await remoteService.createProfile(
+					profile,
+					{
+						profileListID: stateValues.collectionID.get()
+					} as IupdateProfileOpts
+				);
+
+				if (!remoteResult.success) {
+					throw new Error(
+						`Failed to create remote profile: ${remoteResult.error}`
+					);
+				}
+
+				logger.inform(`Profile "${profileName}" created successfully`);
+				localService.startWatching();
+			} else {
+				// User selected an existing profile
+				const profileService = await createProfileService(
+					localService,
+					remoteService,
+					stateValues,
+					logger
+				);
+
+				const switchResult = await profileService.switchProfile(
+					selection
+				);
+				if (!switchResult.success) {
+					throw new Error(
+						`Failed to switch profile: ${switchResult.error}`
+					);
+				}
+
+				logger.inform(`Switched to profile "${selection}"`);
+				localService.startWatching();
 			}
+		} else {
+			// 4. Neither exists - first-time setup
+			logger.inform(
+				'Welcome to CursorSync! Setting up your first profile...'
+			);
+
+			// Get profile name
+			const profileName = await window.showInputBox({
+				placeHolder: 'Enter a name for your profile',
+				prompt: 'This will be your default profile'
+			});
+
+			if (!profileName) {
+				throw new Error('Profile name is required for setup');
+			}
+
+			// Ask for optional tags
+			const tagString = await window.showInputBox({
+				placeHolder: 'Optional: Enter tags separated by commas',
+				prompt: 'Tags help you organize profiles (e.g., "work,development")'
+			});
+
+			const tags = tagString
+				? tagString.split(',').map((t) => t.trim())
+				: [];
+
+			// Create default profile
+			const settingsResult = await localService.readLocalSettings();
+			if (!settingsResult.success) {
+				throw new Error(
+					`Failed to read settings: ${settingsResult.error}`
+				);
+			}
+
+			const profile: IProfile = {
+				default: true, // This is the default profile
+				profileName: profileName,
+				tags: tags,
+				createdAt: Date.now(),
+				modifiedAt: Date.now(),
+				settings: settingsResult.data!,
+				extensions: localService.getInstalledExtensions()
+			};
+
+			// Create local profile
+			const localResult = await localService.createLocalProfile(profile);
+			if (!localResult.success) {
+				throw new Error(
+					`Failed to create local profile: ${localResult.error}`
+				);
+			}
+
+			// Initialize remote
+			const remoteResult = await remoteService.initializeRemote(profile);
+			if (!remoteResult.success) {
+				throw new Error(
+					`Failed to initialize remote: ${remoteResult.error}`
+				);
+			}
+
+			logger.inform(
+				`Profile "${profileName}" created and synced to GitHub`
+			);
+			localService.startWatching();
 		}
-
-		// Start file watcher
-		localService.startWatching();
-
-		// Create commands array
-		const commands: Disposable[] = [
-			runDebugContext,
-			runDebugState,
-			runResetState,
-			runDebugSession,
-			runUpdateSettingsLocation
-		];
 
 		// Create the core object
 		const core = {
 			// State values
 			settingsPath: stateValues.settingsPath,
-
-			// Gist data
+			activeProfile: stateValues.activeProfile,
+			collectionID: stateValues.collectionID,
 
 			// Services
 			services: {
@@ -178,6 +373,7 @@ export const buildExtensionCore = async (
 			// Disposables for cleanup
 			disposables: commands
 		};
+
 		return {
 			success: true,
 			data: core
