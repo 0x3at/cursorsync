@@ -24,74 +24,22 @@
 		},
 		"commands": [
 			{
-				"command": "cursorsync.refreshGistView",
-				"title": "Refresh Gist View",
-				"icon": "$(refresh)",
-				"category": "CursorSync"
+				"command": "cursorsync.showMenu",
+				"title": "Main Menu",
+				"category": "CursorSync",
+				"icon": "$(refresh)"
 			},
 			{
-				"command": "cursorsync.update.deviceLabel",
-				"title": "Update Device Label",
+				"command": "cursorsync.showProfileMenu",
+				"title": "Profile Menu",
 				"category": "$(references)CursorSync",
 				"icon": "$(key)"
 			},
 			{
-				"command": "cursorsync.update.settingspath",
-				"title": "Discover Settings Path",
-				"category": "$(cloud-upload-cloud-download)CursorSync",
-				"shortTitle": "Discover Settings Path"
-			},
-			{
-				"command": "cursorsync.debug.showsession",
-				"title": "CursorSync: Inspect Auth Session"
-			},
-			{
-				"command": "cursorsync.debug.showstate",
-				"title": "CursorSync: Inspect Global State Keys"
-			},
-			{
-				"command": "cursorsync.debug.showcontext",
-				"title": "CursorSync: Inspect Context Values"
-			},
-			{
-				"command": "cursorsync.reset.state",
-				"title": "CursorSync: Reset Global State"
-			},
-			{
-				"command": "cursorsync.syncNow",
-				"title": "Sync: Sync Now",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.switchProfile",
-				"title": "Sync: Switch Profile",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.createProfile",
-				"title": "Sync: Create New Profile",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.deleteProfile",
-				"title": "Sync: Delete Profile",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.resetLocalProfile",
-				"title": "Debug: Reset Local Profile Record",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.showMenu",
-				"title": "Sync: Show Menu",
-				"category": "CursorSync"
-			},
-			{
-				"command": "cursorsync.refreshGistView",
-				"title": "Sync: Refresh View",
-				"category": "CursorSync",
-				"icon": "$(refresh)"
+				"command": "cursorsync.showDebugMenu",
+				"title": "Debug Menu",
+				"category": "$(references)CursorSync",
+				"icon": "$(key)"
 			}
 		],
 		"menus": {

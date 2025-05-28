@@ -1,10 +1,10 @@
 import { commands, ExtensionContext, window } from 'vscode';
 
-import { registerCommands } from './domain/commands/profile';
+import { registerCommands } from './domain/commands/menus';
 import { registerProfileTreeView } from './domain/commands/view';
 import { buildExtensionCore, IExtensionCore } from './domain/services/core';
-import Logger, { ILogger } from './utils/logger';
 import { IResult } from './shared/schemas/api.git';
+import Logger, { ILogger } from './utils/logger';
 
 export async function activate(context: ExtensionContext) {
 	const logger: ILogger = Logger(context);
@@ -22,7 +22,6 @@ export async function activate(context: ExtensionContext) {
 		// Register Commands
 		registerCommands(context, core.data!, logger);
 		core.data?.disposables.forEach((d) => context.subscriptions.push(d));
-
 		// Register Explorer View
 		registerProfileTreeView(context, core.data!);
 		logger.inform('CursorSync activated successfully');

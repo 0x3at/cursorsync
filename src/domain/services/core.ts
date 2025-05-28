@@ -1,16 +1,11 @@
 import { Disposable, ExtensionContext, window } from 'vscode';
 import * as vscode from 'vscode';
 
-import { contextFlags } from '../../shared/environment';
-import { IProfile, IProfiles } from '../../shared/schemas/profile';
+import { contextFlags, IFlags } from '../../shared/environment';
+import { IResult } from '../../shared/schemas/api.git';
+import { IProfile } from '../../shared/schemas/profile';
 import { ILogger } from '../../utils/logger';
 import { createValueStore, IValueStore } from '../../utils/stores';
-import {
-	registerDebugContext,
-	registerDebugSession,
-	registerDebugState,
-	registerResetState
-} from '../commands/debug';
 import { registerUpdateSettingsLocation } from '../commands/set';
 import {
 	createApiService,
@@ -26,7 +21,6 @@ import {
 import { createLocalService, ILocalService } from '../services/local';
 import { createProfileService, IProfileService } from '../services/profile';
 import { createRemoteService, IRemoteService } from '../services/remote';
-import { IResult } from '../../shared/schemas/api.git';
 
 export interface IStateValues {
 	activeProfile: IValueStore<string>;
@@ -35,6 +29,7 @@ export interface IStateValues {
 }
 
 export interface IExtensionCore {
+	flags: IFlags;
 	settingsPath: IValueStore<string>;
 	activeProfile: IValueStore<string>;
 	collectionID: IValueStore<string>;
@@ -65,12 +60,6 @@ export const buildExtensionCore = async (
 		} else {
 			flags.DevMode.methods.deactivate();
 		}
-
-		// Register Debug Commands
-		const runDebugState = registerDebugState(context, logger);
-		const runDebugContext = registerDebugContext(logger, flags);
-		const runResetState = registerResetState(context, logger);
-		const runDebugSession = registerDebugSession(logger);
 
 		// Initialize value stores
 		const stateValues = {
@@ -109,13 +98,7 @@ export const buildExtensionCore = async (
 				'cursorsync.update.settingspath'
 			);
 		}
-		const commands: Disposable[] = [
-			runDebugContext,
-			runDebugState,
-			runResetState,
-			runDebugSession,
-			runUpdateSettingsLocation
-		];
+		const commands: Disposable[] = [runUpdateSettingsLocation];
 
 		// Initialize services
 		const authService = createAuthService(logger);
@@ -359,6 +342,7 @@ export const buildExtensionCore = async (
 			settingsPath: stateValues.settingsPath,
 			activeProfile: stateValues.activeProfile,
 			collectionID: stateValues.collectionID,
+			flags: flags,
 
 			// Services
 			services: {

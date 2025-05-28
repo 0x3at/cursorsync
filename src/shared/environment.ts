@@ -21,6 +21,7 @@ interface IFlagStore {
 	toggle: () => void;
 }
 export interface IFlags {
+	[key: string]: { name: string; methods: IFlagStore };
 	SetupPending: { name: string; methods: IFlagStore };
 	LabelConflict: { name: string; methods: IFlagStore };
 	DevMode: { name: string; methods: IFlagStore };

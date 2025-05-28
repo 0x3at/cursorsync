@@ -150,9 +150,12 @@ export const createRemoteService = (
 						logger.debug(
 							`Obtaining Profile Data for profile ${name}`
 						);
-						const result = await pullProfile({
-							gist: gistResult.data!
-						} as IgetProfileOpts);
+						const result = await pullProfile(
+							{
+								gist: gistResult.data!
+							} as IgetProfileOpts,
+							name
+						);
 						if (result.success) {
 							return result.data;
 						}
